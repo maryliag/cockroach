@@ -29,23 +29,19 @@ const descriptionClassName = statementsCx("cl-table-link__description");
 const textWrapper = ownCellStyles("text-wrapper");
 const hoverAreaClassName = ownCellStyles("hover-area");
 
+type Transaction = protos.cockroach.server.serverpb.StatementsResponse.IExtendedCollectedTransactionStatistics;
 type TransactionStats = protos.cockroach.sql.ITransactionStatistics;
 
 interface TextCellProps {
   transactionText: string;
-  transactionIds: Long[];
-  transactionStats: TransactionStats;
-  handleDetails: (
-    transactionIds: Long[],
-    transactionStats: TransactionStats,
-  ) => void;
+  transaction: Transaction;
+  handleDetails: (transaction: Transaction) => void;
   search: string;
 }
 
 export const textCell = ({
   transactionText,
-  transactionIds,
-  transactionStats,
+  transaction,
   handleDetails,
   search,
 }: TextCellProps) => {
@@ -62,7 +58,7 @@ export const textCell = ({
       >
         <div className={textWrapper}>
           <div
-            onClick={() => handleDetails(transactionIds, transactionStats)}
+            onClick={() => handleDetails(transaction)}
             className={hoverAreaClassName}
           >
             {getHighlightedText(

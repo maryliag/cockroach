@@ -65,6 +65,7 @@ import (
 	"github.com/cockroachdb/cockroach/pkg/util/syncutil"
 	"github.com/cockroachdb/cockroach/pkg/util/timeutil"
 	"github.com/cockroachdb/cockroach/pkg/util/tracing"
+	"github.com/cockroachdb/cockroach/pkg/util/uuid"
 	"github.com/cockroachdb/errors"
 	"github.com/cockroachdb/logtags"
 	"golang.org/x/net/trace"
@@ -1038,6 +1039,11 @@ type connExecutor struct {
 	// This is only used in the Open state. extraTxnState is reset whenever a
 	// transaction finishes or gets retried.
 	extraTxnState struct {
+		// txnID is the uuid of the current transaction and it's used to
+		// associate a statement to a transaction when it's a explicit
+		// transaction.
+		txnID uuid.UUID
+
 		// descCollection collects descriptors used by the current transaction.
 		descCollection descs.Collection
 

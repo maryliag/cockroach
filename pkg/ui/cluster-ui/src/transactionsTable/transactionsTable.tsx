@@ -9,7 +9,6 @@
 // licenses/APL.txt.
 
 import React from "react";
-import * as protos from "@cockroachlabs/crdb-protobuf-client";
 import {
   SortedTable,
   ISortedTablePagination,
@@ -30,27 +29,19 @@ import { tableClasses } from "./transactionsTableClasses";
 import { textCell } from "./transactionsCells";
 import { FixLong, longToInt } from "src/util";
 import { SortSetting } from "../sortedtable";
-import {
-  getStatementsById,
-  collectStatementsText,
-} from "../transactionsPage/utils";
 import Long from "long";
 import classNames from "classnames/bind";
 import statementsPageStyles from "src/statementsTable/statementsTableContent.module.scss";
-
-type Transaction = protos.cockroach.server.serverpb.StatementsResponse.IExtendedCollectedTransactionStatistics;
-type TransactionStats = protos.cockroach.sql.ITransactionStatistics;
-type CollectedTransactionStatistics = protos.cockroach.sql.ICollectedTransactionStatistics;
-type Statement = protos.cockroach.server.serverpb.StatementsResponse.ICollectedStatementStatistics;
+import { cockroach } from "@cockroachlabs/crdb-protobuf-client";
+type Transaction = cockroach.server.serverpb.StatementsResponse.IExtendedCollectedTransactionStatistics;
+type TransactionStats = cockroach.sql.ITransactionStatistics;
+type Statement = cockroach.server.serverpb.StatementsResponse.ICollectedStatementStatistics;
 
 interface TransactionsTable {
-  transactions: TransactionInfo[];
+  transactions: Transaction[];
   sortSetting: SortSetting;
   onChangeSortSetting: (ss: SortSetting) => void;
-  handleDetails: (
-    statementIds: Long[] | null,
-    transactionStats: TransactionStats,
-  ) => void;
+  handleDetails: (transaction: Transaction) => void;
   pagination: ISortedTablePagination;
   statements: Statement[];
   nodeRegions: { [key: string]: string };
@@ -75,12 +66,12 @@ export const TransactionsTable: React.FC<TransactionsTable> = props => {
   };
   const sampledExecStatsBarChartOptions = {
     classes: defaultBarChartOptions.classes,
-    displayNoSamples: (d: TransactionInfo) => {
+    displayNoSamples: (d: Transaction) => {
       return longToInt(d.stats_data.stats.exec_stats?.count) == 0;
     },
   };
 
-  const { transactions, handleDetails, statements, search } = props;
+  const { transactions, handleDetails, search } = props;
   const countBar = transactionsCountBarChart(transactions);
   const rowsReadBar = transactionsRowsReadBarChart(
     transactions,
@@ -113,18 +104,12 @@ export const TransactionsTable: React.FC<TransactionsTable> = props => {
       title: <>Transactions</>,
       cell: (item: TransactionInfo) =>
         textCell({
-          transactionText: collectStatementsText(
-            getStatementsById(item.stats_data.statement_ids, statements),
-          ),
-          transactionIds: item.stats_data.statement_ids,
-          transactionStats: item.stats_data.stats,
+          transactionText: item.fingerprint,
+          transaction: item,
           handleDetails,
           search,
         }),
-      sort: (item: TransactionInfo) =>
-        collectStatementsText(
-          getStatementsById(item.stats_data.statement_ids, statements),
-        ),
+      sort: (item: TransactionInfo) => item.fingerprint,
     },
     {
       name: "execution count",

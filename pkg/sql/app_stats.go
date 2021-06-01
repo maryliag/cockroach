@@ -39,6 +39,7 @@ import (
 	"github.com/cockroachdb/cockroach/pkg/util/mon"
 	"github.com/cockroachdb/cockroach/pkg/util/syncutil"
 	"github.com/cockroachdb/cockroach/pkg/util/timeutil"
+	"github.com/cockroachdb/cockroach/pkg/util/uuid"
 	"github.com/cockroachdb/errors"
 )
 
@@ -51,6 +52,7 @@ type stmtKey struct {
 	failed         bool
 	implicitTxn    bool
 	database       string
+	txnID          uuid.UUID
 }
 
 func (s stmtKey) String() string {
@@ -144,6 +146,10 @@ type stmtStats struct {
 		// database records the database from the session the statement
 		// was executed from
 		database string
+
+		// txnID records the transaction id from which the statement is part of
+		// when the statement is part of an explicit transaction
+		txnID uuid.UUID
 
 		data roachpb.StatementStatistics
 	}
@@ -284,6 +290,7 @@ func (a *appStats) recordStatement(
 	parseLat, planLat, runLat, svcLat, ovhLat float64,
 	stats topLevelQueryStats,
 	planner *planner,
+	txnID uuid.UUID,
 ) (roachpb.StmtID, error) {
 	createIfNonExistent := true
 	// If the statement is below the latency threshold, or stats aren't being
@@ -297,7 +304,7 @@ func (a *appStats) recordStatement(
 	// Get the statistics object.
 	s, statementKey, stmtID, created, throttled := a.getStatsForStmt(
 		stmt.AnonymizedStr, implicitTxn, planner.SessionData().Database,
-		stmtErr, createIfNonExistent,
+		txnID, stmtErr, createIfNonExistent,
 	)
 
 	// This means we have reached the limit of unique fingerprints. We don't
@@ -362,6 +369,7 @@ func (a *appStats) recordStatement(
 	s.mu.distSQLUsed = distSQLUsed
 	s.mu.fullScan = fullScan
 	s.mu.database = planner.CurrentDatabase()
+	s.mu.txnID = txnID
 
 	if created {
 		// stats size + stmtKey size + hash of the statementKey
@@ -383,7 +391,12 @@ func (a *appStats) recordStatement(
 // stat object is returned or not, we always return the correct stmtID
 // for the given stmt.
 func (a *appStats) getStatsForStmt(
-	anonymizedStmt string, implicitTxn bool, database string, stmtErr error, createIfNonexistent bool,
+	anonymizedStmt string,
+	implicitTxn bool,
+	database string,
+	txnID uuid.UUID,
+	stmtErr error,
+	createIfNonexistent bool,
 ) (stats *stmtStats, key stmtKey, stmtID roachpb.StmtID, created bool, throttled bool) {
 	// Extend the statement key with various characteristics, so
 	// that we use separate buckets for the different situations.
@@ -392,6 +405,7 @@ func (a *appStats) getStatsForStmt(
 		failed:         stmtErr != nil,
 		implicitTxn:    implicitTxn,
 		database:       database,
+		txnID:          txnID,
 	}
 
 	// We first try and see if we can get by without creating a new entry for this
@@ -687,7 +701,6 @@ func (a *appStats) recordTransaction(
 		}
 		a.Unlock()
 	}
-
 	s.mu.data.Count++
 
 	s.mu.data.NumRows.Record(s.mu.data.Count, float64(numRows))
@@ -925,7 +938,7 @@ func dumpStmtStats(ctx context.Context, appName string, stats map[stmtKey]*stmtS
 
 func constructStatementIDFromStmtKey(key stmtKey) roachpb.StmtID {
 	return roachpb.ConstructStatementID(
-		key.anonymizedStmt, key.failed, key.implicitTxn, key.database,
+		key.anonymizedStmt, key.failed, key.implicitTxn, key.database, key.txnID,
 	)
 }
 
@@ -1014,6 +1027,7 @@ func (s *sqlStats) getStmtStats(
 				vectorized := stats.mu.vectorized
 				fullScan := stats.mu.fullScan
 				database := stats.mu.database
+				txnID := stats.mu.txnID
 				stats.mu.Unlock()
 
 				k := roachpb.StatementStatisticsKey{
@@ -1026,6 +1040,7 @@ func (s *sqlStats) getStmtStats(
 					Failed:      q.failed,
 					App:         maybeHashedAppName,
 					Database:    database,
+					TxnID:       txnID.String(),
 				}
 
 				if scrub {

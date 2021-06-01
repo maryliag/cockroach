@@ -22,19 +22,10 @@ import {
   baseHeadingClasses,
   statisticsClasses,
 } from "./transactionsPageClasses";
-import {
-  aggregateAcrossNodeIDs,
-  generateRegionNode,
-  getTrxAppFilterOptions,
-} from "./utils";
-import {
-  searchTransactionsData,
-  filterTransactions,
-  getStatementsById,
-} from "./utils";
+import { generateRegionNode, getTrxAppFilterOptions } from "./utils";
+import { searchTransactionsData, filterTransactions } from "./utils";
 import { forIn } from "lodash";
-import Long from "long";
-import { aggregateStatementStats, getSearchParams, unique } from "src/util";
+import { getSearchParams, unique } from "src/util";
 import { EmptyTransactionsPlaceholder } from "./emptyTransactionsPlaceholder";
 import { Loading } from "../loading";
 import { PageConfig, PageConfigItem } from "../pageConfig";
@@ -47,7 +38,7 @@ import {
 } from "../queryFilter";
 
 type IStatementsResponse = protos.cockroach.server.serverpb.IStatementsResponse;
-type TransactionStats = protos.cockroach.sql.ITransactionStatistics;
+type Transaction = protos.cockroach.server.serverpb.StatementsResponse.IExtendedCollectedTransactionStatistics;
 
 const cx = classNames.bind(styles);
 
@@ -56,8 +47,7 @@ interface TState {
   pagination: ISortedTablePagination;
   search?: string;
   filters?: Filters;
-  statementIds: Long[] | null;
-  transactionStats: TransactionStats | null;
+  transaction: Transaction | null;
 }
 
 interface TransactionsPageProps {
@@ -89,8 +79,7 @@ export class TransactionsPage extends React.Component<
     },
     search: this.trxSearchParams("q", "").toString(),
     filters: this.filters,
-    statementIds: null,
-    transactionStats: null,
+    transaction: null,
   };
 
   componentDidMount() {
@@ -190,11 +179,8 @@ export class TransactionsPage extends React.Component<
     });
   };
 
-  handleDetails = (
-    statementIds: Long[] | null,
-    transactionStats: TransactionStats,
-  ) => {
-    this.setState({ statementIds, transactionStats });
+  handleDetails = (transaction: Transaction) => {
+    this.setState({ transaction });
   };
 
   lastReset = () => {
@@ -233,20 +219,21 @@ export class TransactionsPage extends React.Component<
               transactions: filteredTransactions,
               activeFilters,
             } = filterTransactions(
-              searchTransactionsData(search, data.transactions, statements),
+              searchTransactionsData(search, data.transactions),
               filters,
               internal_app_name_prefix,
               statements,
               nodeRegions,
             );
-            const transactionsToDisplay: TransactionInfo[] = aggregateAcrossNodeIDs(
-              filteredTransactions,
-              statements,
-            ).map(t => ({
-              stats_data: t.stats_data,
-              node_id: t.node_id,
-              regionNodes: generateRegionNode(t, statements, nodeRegions),
-            }));
+            const transactionsToDisplay: TransactionInfo[] = filteredTransactions.map(
+              t => ({
+                fingerprint: t.fingerprint,
+                statements: t.statements,
+                stats_data: t.stats_data,
+                node_id: t.node_id,
+                regionNodes: generateRegionNode(t, statements, nodeRegions),
+              }),
+            );
             const { current, pageSize } = pagination;
             const hasData = data.transactions?.length > 0;
             const isUsedFilter = search?.length > 0;
@@ -316,16 +303,10 @@ export class TransactionsPage extends React.Component<
   }
 
   renderTransactionDetails() {
-    const { statements } = this.props.data;
-    const { statementIds } = this.state;
-    const transactionDetails =
-      statementIds && getStatementsById(statementIds, statements);
-
     return (
       <TransactionDetails
-        statements={aggregateStatementStats(transactionDetails)}
         nodeRegions={this.props.nodeRegions}
-        transactionStats={this.state.transactionStats}
+        transaction={this.state.transaction}
         lastReset={this.lastReset()}
         handleDetails={this.handleDetails}
         error={this.props.error}
@@ -335,8 +316,8 @@ export class TransactionsPage extends React.Component<
   }
 
   render() {
-    const { statementIds } = this.state;
-    const renderTxDetailsView = !!statementIds;
+    const { transaction } = this.state;
+    const renderTxDetailsView = !!transaction;
     return renderTxDetailsView
       ? this.renderTransactionDetails()
       : this.renderTransactionsList();

@@ -14,17 +14,18 @@ import (
 	"math"
 
 	"github.com/cockroachdb/cockroach/pkg/util"
+	"github.com/cockroachdb/cockroach/pkg/util/uuid"
 )
 
 // StmtID is the type of a Statement ID.
 type StmtID uint64
 
 // ConstructStatementID constructs an ID by hashing an anonymized query, its database
-// and failure status, and if it was part of an implicit txn. At the time of writing,
-// these are the axis' we use to bucket queries for stats collection
-// (see stmtKey).
+// and failure status, if it was part of an implicit txn and the txn id if was part of
+// an explicit txn. At the time of writing, these are the axis' we use to bucket
+// queries for stats collection (see stmtKey).
 func ConstructStatementID(
-	anonymizedStmt string, failed bool, implicitTxn bool, database string,
+	anonymizedStmt string, failed bool, implicitTxn bool, database string, txnID uuid.UUID,
 ) StmtID {
 	fnv := util.MakeFNV64()
 	for _, c := range anonymizedStmt {
@@ -42,6 +43,11 @@ func ConstructStatementID(
 		fnv.Add('I')
 	} else {
 		fnv.Add('E')
+		// If the statements belong to an explicit transaction, we want to add the
+		// transaction id as part of the id, so they can be separated.
+		for _, c := range txnID {
+			fnv.Add(uint64(c))
+		}
 	}
 	return StmtID(fnv.Sum())
 }

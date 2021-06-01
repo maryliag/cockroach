@@ -16,6 +16,7 @@ import (
 	"github.com/cockroachdb/cockroach/pkg/sql/sem/tree"
 	"github.com/cockroachdb/cockroach/pkg/util/log"
 	"github.com/cockroachdb/cockroach/pkg/util/metric"
+	"github.com/cockroachdb/cockroach/pkg/util/uuid"
 )
 
 // EngineMetrics groups a set of SQL metrics.
@@ -85,6 +86,7 @@ func (ex *connExecutor) recordStatementSummary(
 	rowsAffected int,
 	stmtErr error,
 	stats topLevelQueryStats,
+	txnID uuid.UUID,
 ) {
 	phaseTimes := ex.statsCollector.phaseTimes
 
@@ -130,7 +132,7 @@ func (ex *connExecutor) recordStatementSummary(
 		flags.IsSet(planFlagImplicitTxn),
 		flags.IsSet(planFlagContainsFullIndexScan) || flags.IsSet(planFlagContainsFullTableScan),
 		automaticRetryCount, rowsAffected, stmtErr,
-		parseLat, planLat, runLat, svcLat, execOverhead, stats, planner,
+		parseLat, planLat, runLat, svcLat, execOverhead, stats, planner, txnID,
 	)
 
 	if err != nil {

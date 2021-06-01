@@ -21,15 +21,15 @@ import _ from "lodash";
 import {
   addExecStats,
   aggregateNumericStats,
-  containAny,
   FixLong,
   longToInt,
-  unique,
 } from "../util";
+import { TransactionInfo } from "../transactionsTable";
 
 type Statement = protos.cockroach.server.serverpb.StatementsResponse.ICollectedStatementStatistics;
 type TransactionStats = protos.cockroach.sql.ITransactionStatistics;
 type Transaction = protos.cockroach.server.serverpb.StatementsResponse.IExtendedCollectedTransactionStatistics;
+type ICollectedStatementStatistics = protos.cockroach.server.serverpb.StatementsResponse.ICollectedStatementStatistics;
 
 export const getTrxAppFilterOptions = (
   transactions: Transaction[],
@@ -50,6 +50,7 @@ export const getTrxAppFilterOptions = (
     }));
 };
 
+//TODO might remove
 export const collectStatementsText = (statements: Statement[]): string =>
   statements.map(s => s.key.key_data.query).join("\n");
 
@@ -61,7 +62,7 @@ export const getStatementsById = (
 };
 
 export const aggregateStatements = (
-  statements: Statement[],
+  statements: ICollectedStatementStatistics[],
 ): AggregateStatistics[] =>
   statements.map((s: Statement) => ({
     label: s.key.key_data.query,
@@ -74,16 +75,11 @@ export const aggregateStatements = (
 export const searchTransactionsData = (
   search: string,
   transactions: Transaction[],
-  statements: Statement[],
 ): Transaction[] => {
   return transactions.filter((t: Transaction) =>
-    search.split(" ").every(val =>
-      collectStatementsText(
-        getStatementsById(t.stats_data.statement_ids, statements),
-      )
-        .toLowerCase()
-        .includes(val.toLowerCase()),
-    ),
+    search
+      .split(" ")
+      .every(val => t.fingerprint.toLowerCase().includes(val.toLowerCase())),
   );
 };
 
@@ -202,6 +198,7 @@ type TransactionWithFingerprint = Transaction & { fingerprint: string };
 
 // withFingerprint adds the concatenated statement fingerprints to the Transaction object since it
 // only comes with statement_ids
+// TODO might remove
 const withFingerprint = function(
   t: Transaction,
   stmts: Statement[],
@@ -262,7 +259,9 @@ function combineTransactionStats(
 // and returns a copy of the first element with its `stats_data.stats` object replaced with a
 // merged stats object that aggregates statistics from every copy of the fingerprint in the list
 // provided
-const mergeTransactionStats = function(txns: Transaction[]): Transaction {
+const mergeTransactionStats = function(
+  txns: TransactionInfo[],
+): TransactionInfo {
   if (txns.length === 0) {
     return null;
   }
@@ -282,14 +281,14 @@ const mergeTransactionStats = function(txns: Transaction[]): Transaction {
 // The function uses the fingerprint and the `app` that ran the transaction as the key to group the
 // transactions when deduping.
 //
-export const aggregateAcrossNodeIDs = function(
-  t: Transaction[],
-  stmts: Statement[],
-): Transaction[] {
-  return _.chain(t)
-    .map(t => withFingerprint(t, stmts))
-    .groupBy(t => t.fingerprint + t.stats_data.app)
-    .mapValues(mergeTransactionStats)
-    .values()
-    .value();
-};
+//TODO migth remove
+// export const aggregateAcrossNodeIDs = function(
+//   t: Transaction[],
+// ): Transaction[] {
+//   return _.chain(t)
+//     .map(t => t.fingerprint)
+//     .groupBy(t => t.fingerprint + t.stats_data.app)
+//     .mapValues(mergeTransactionStats)
+//     .values()
+//     .value();
+// };

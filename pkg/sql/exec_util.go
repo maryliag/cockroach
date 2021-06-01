@@ -2510,11 +2510,12 @@ func (s *sqlStatsCollector) recordStatement(
 	parseLat, planLat, runLat, svcLat, ovhLat float64,
 	stats topLevelQueryStats,
 	planner *planner,
+	txnID uuid.UUID,
 ) (roachpb.StmtID, error) {
 	return s.appStats.recordStatement(
 		ctx, stmt, samplePlanDescription, distSQLUsed, vectorized, implicitTxn, fullScan,
 		automaticRetryCount, numRows, err, parseLat, planLat, runLat, svcLat,
-		ovhLat, stats, planner,
+		ovhLat, stats, planner, txnID,
 	)
 }
 

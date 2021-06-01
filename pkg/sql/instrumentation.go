@@ -34,6 +34,7 @@ import (
 	"github.com/cockroachdb/cockroach/pkg/util/log"
 	"github.com/cockroachdb/cockroach/pkg/util/tracing"
 	"github.com/cockroachdb/cockroach/pkg/util/tracing/tracingpb"
+	"github.com/cockroachdb/cockroach/pkg/util/uuid"
 	"github.com/cockroachdb/errors"
 )
 
@@ -72,6 +73,7 @@ type instrumentationHelper struct {
 	// Query fingerprint (anonymized statement).
 	fingerprint string
 	implicitTxn bool
+	txnID       uuid.UUID
 	codec       keys.SQLCodec
 
 	// -- The following fields are initialized by Setup() --
@@ -143,9 +145,11 @@ func (ih *instrumentationHelper) Setup(
 	fingerprint string,
 	implicitTxn bool,
 	collectTxnExecStats bool,
+	txnID uuid.UUID,
 ) (newCtx context.Context, needFinish bool) {
 	ih.fingerprint = fingerprint
 	ih.implicitTxn = implicitTxn
+	ih.txnID = txnID
 	ih.codec = cfg.Codec
 
 	switch ih.outputMode {
@@ -171,7 +175,7 @@ func (ih *instrumentationHelper) Setup(
 	// worst that can happen is that for statements that always error out, we
 	// will always save the tree plan.
 	stats, _, _, _, _ := appStats.getStatsForStmt(
-		fingerprint, implicitTxn, p.SessionData().Database, nil /* stmtErr */, false /* createIfNonexistent */)
+		fingerprint, implicitTxn, p.SessionData().Database, txnID, nil /* stmtErr */, false /* createIfNonexistent */)
 
 	ih.savePlanForStats = appStats.shouldSaveLogicalPlanDescription(stats)
 
@@ -267,7 +271,7 @@ func (ih *instrumentationHelper) Finish(
 		log.VInfof(ctx, 1, msg, ih.fingerprint, err)
 	} else {
 		// TODO(radu): this should be unified with other stmt stats accesses.
-		stmtStats, _, _, _, _ := appStats.getStatsForStmt(ih.fingerprint, ih.implicitTxn, p.SessionData().Database, retErr, false)
+		stmtStats, _, _, _, _ := appStats.getStatsForStmt(ih.fingerprint, ih.implicitTxn, p.SessionData().Database, ih.txnID, retErr, false)
 		if stmtStats != nil {
 			stmtStats.recordExecStats(queryLevelStats)
 			if collectTxnExecStats || ih.implicitTxn {
