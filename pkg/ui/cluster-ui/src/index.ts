@@ -30,6 +30,7 @@ export * from "./statementsPage";
 export * from "./statementDetails";
 export * from "./statementsTable";
 export * from "./sql";
+export * from "./sqlActivityPage";
 export * from "./table";
 export * from "./store";
 export * from "./transactionsPage";

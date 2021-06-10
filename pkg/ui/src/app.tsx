@@ -66,6 +66,7 @@ import StatementsPage from "src/views/statements/statementsPage";
 import SessionsPage from "src/views/sessions/sessionsPage";
 import SessionDetails from "src/views/sessions/sessionDetails";
 import TransactionsPage from "src/views/transactions/transactionsPage";
+import SQLActivityPage from "src/views/sqlActivity/sqlActivityPage";
 import StatementsDiagnosticsHistoryView from "src/views/reports/containers/statementDiagnosticsHistory";
 import "styl/app.styl";
 
@@ -241,6 +242,8 @@ export const App: React.FC<AppProps> = (props: AppProps) => {
                   path="/transactions"
                   component={TransactionsPage}
                 />
+                {/* SQL Activity */}
+                <Route exact path="/sql-activity" component={SQLActivityPage} />
 
                 {/* debug pages */}
                 <Route exact path="/debug" component={Debug} />
