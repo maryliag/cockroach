@@ -43,6 +43,7 @@ type stmtKey struct {
 	failed         bool
 	implicitTxn    bool
 	database       string
+	txnID          string
 }
 
 func (s stmtKey) String() string {
@@ -96,9 +97,12 @@ type Container struct {
 	}
 
 	txnCounts transactionCounts
+
+	appName string
 }
 
 var _ sqlstats.Writer = &Container{}
+var _ sqlstats.Iterators = &Container{}
 
 // New returns a new instance of Container.
 func New(
@@ -108,11 +112,13 @@ func New(
 	uniqueStmtFingerprintCount *int64,
 	uniqueTxnFingerprintCount *int64,
 	mon *mon.BytesMonitor,
+	appName string,
 ) *Container {
 	s := &Container{
 		st:                         st,
 		uniqueStmtFingerprintLimit: uniqueStmtFingerprintLimit,
 		uniqueTxnFingerprintLimit:  uniqueTxnFingerprintLimit,
+		appName:                    appName,
 	}
 
 	s.mu.acc = mon.MakeBoundAccount()
@@ -125,10 +131,24 @@ func New(
 	return s
 }
 
+// TODO marylia may need appName
+func NewTemporaryContainer(st *cluster.Settings) *Container {
+	s := &Container{st: st}
+
+	s.mu.stmts = make(map[stmtKey]*stmtStats)
+	s.mu.txns = make(map[roachpb.TransactionFingerprintID]*txnStats)
+
+	return s
+}
+
+func (s *Container) GetAppName() string {
+	return s.appName
+}
+
 // IterateStatementStats iterates through the stored statement statistics
 // stored in this Container.
 func (s *Container) IterateStatementStats(
-	appName string, orderedKey bool, visitor sqlstats.StatementVisitor,
+	_ context.Context, options *sqlstats.IteratorOptions, visitor sqlstats.StatementVisitor,
 ) error {
 	var stmtKeys stmtList
 	s.mu.Lock()
@@ -136,7 +156,7 @@ func (s *Container) IterateStatementStats(
 		stmtKeys = append(stmtKeys, k)
 	}
 	s.mu.Unlock()
-	if orderedKey {
+	if options.SortedKey {
 		sort.Sort(stmtKeys)
 	}
 
@@ -158,19 +178,21 @@ func (s *Container) IterateStatementStats(
 		vectorized := statementStats.mu.vectorized
 		fullScan := statementStats.mu.fullScan
 		database := statementStats.mu.database
+		txnFingerprintId := statementStats.mu.txnFingerprintID
 		statementStats.mu.Unlock()
 
 		collectedStats := roachpb.CollectedStatementStatistics{
 			Key: roachpb.StatementStatisticsKey{
-				Query:       stmtKey.anonymizedStmt,
-				DistSQL:     distSQLUsed,
-				Opt:         true,
-				Vec:         vectorized,
-				ImplicitTxn: stmtKey.implicitTxn,
-				FullScan:    fullScan,
-				Failed:      stmtKey.failed,
-				App:         appName,
-				Database:    database,
+				Query:            stmtKey.anonymizedStmt,
+				DistSQL:          distSQLUsed,
+				Opt:              true,
+				Vec:              vectorized,
+				ImplicitTxn:      stmtKey.implicitTxn,
+				FullScan:         fullScan,
+				Failed:           stmtKey.failed,
+				App:              s.appName,
+				Database:         database,
+				TxnFingerprintId: txnFingerprintId,
 			},
 			ID:    stmtFingerprintID,
 			Stats: data,
@@ -187,7 +209,7 @@ func (s *Container) IterateStatementStats(
 // IterateTransactionStats iterates through the stored transaction statistics
 // stored in this Container.
 func (s *Container) IterateTransactionStats(
-	appName string, orderedKey bool, visitor sqlstats.TransactionVisitor,
+	_ context.Context, options *sqlstats.IteratorOptions, visitor sqlstats.TransactionVisitor,
 ) error {
 	// Retrieve the transaction keys and optionally sort them.
 	var txnKeys txnList
@@ -196,7 +218,7 @@ func (s *Container) IterateTransactionStats(
 		txnKeys = append(txnKeys, k)
 	}
 	s.mu.Unlock()
-	if orderedKey {
+	if options.SortedKey {
 		sort.Sort(txnKeys)
 	}
 
@@ -216,7 +238,7 @@ func (s *Container) IterateTransactionStats(
 		txnStats.mu.Lock()
 		collectedStats := roachpb.CollectedTransactionStatistics{
 			StatementFingerprintIDs: txnStats.statementFingerprintIDs,
-			App:                     appName,
+			App:                     s.appName,
 			Stats:                   txnStats.mu.data,
 		}
 		txnStats.mu.Unlock()
@@ -232,14 +254,14 @@ func (s *Container) IterateTransactionStats(
 // IterateAggregatedTransactionStats iterates through the stored aggregated
 // transaction statistics stored in this Container.
 func (s *Container) IterateAggregatedTransactionStats(
-	appName string, visitor sqlstats.AggregatedTransactionVisitor,
+	_ context.Context, _ *sqlstats.IteratorOptions, visitor sqlstats.AggregatedTransactionVisitor,
 ) error {
 	var txnStat roachpb.TxnStats
 	s.txnCounts.mu.Lock()
 	txnStat = s.txnCounts.mu.TxnStats
 	s.txnCounts.mu.Unlock()
 
-	err := visitor(appName, &txnStat)
+	err := visitor(s.appName, &txnStat)
 	if err != nil {
 		return fmt.Errorf("sql stats iteration abort: %s", err)
 	}
@@ -252,7 +274,7 @@ func (s *Container) GetStatementStats(
 	key *roachpb.StatementStatisticsKey,
 ) (*roachpb.CollectedStatementStatistics, error) {
 	statementStats, _, stmtFingerprintID, _, _ := s.getStatsForStmt(
-		key.Query, key.ImplicitTxn, key.Database, key.Failed, false /* createIfNonexistent */)
+		key.Query, key.ImplicitTxn, key.Database, key.TxnFingerprintId, key.Failed, false /* createIfNonexistent */)
 
 	if statementStats == nil {
 		return nil, errors.Errorf("no stats found for the provided key")
@@ -344,6 +366,10 @@ type stmtStats struct {
 		// was executed from
 		database string
 
+		// txnFingerprintId records the transaction id from which the statement is part of
+		// when the statement is part of an explicit transaction
+		txnFingerprintID string
+
 		data roachpb.StatementStatistics
 	}
 }
@@ -377,7 +403,12 @@ func (s *stmtStats) recordExecStats(stats execstats.QueryLevelStats) {
 // stat object is returned or not, we always return the correct stmtFingerprintID
 // for the given stmt.
 func (s *Container) getStatsForStmt(
-	anonymizedStmt string, implicitTxn bool, database string, failed bool, createIfNonexistent bool,
+	anonymizedStmt string,
+	implicitTxn bool,
+	database string,
+	txnFingerprintID string,
+	failed bool,
+	createIfNonexistent bool,
 ) (
 	stats *stmtStats,
 	key stmtKey,
@@ -392,6 +423,7 @@ func (s *Container) getStatsForStmt(
 		failed:         failed,
 		implicitTxn:    implicitTxn,
 		database:       database,
+		txnID:          txnFingerprintID,
 	}
 
 	// We first try and see if we can get by without creating a new entry for this
@@ -416,16 +448,19 @@ func (s *Container) getStatsForStmtWithKey(
 	// doesn't exist yet.
 	stats, ok := s.mu.stmts[key]
 	if !ok && createIfNonexistent {
-		// We check if we have reached the limit of unique fingerprints we can
-		// store.
-		limit := s.uniqueStmtFingerprintLimit.Get(&s.st.SV)
-		incrementedFingerprintCount :=
-			atomic.AddInt64(s.atomic.uniqueStmtFingerprintCount, int64(1) /* delts */)
+		// TODO marylia add comment here
+		if s.uniqueStmtFingerprintLimit != nil {
+			// We check if we have reached the limit of unique fingerprints we can
+			// store.
+			limit := s.uniqueStmtFingerprintLimit.Get(&s.st.SV)
+			incrementedFingerprintCount :=
+				atomic.AddInt64(s.atomic.uniqueStmtFingerprintCount, int64(1) /* delts */)
 
-		// Abort if we have exceeded limit of unique statement fingerprints.
-		if incrementedFingerprintCount > limit {
-			atomic.AddInt64(s.atomic.uniqueStmtFingerprintCount, -int64(1) /* delts */)
-			return stats, false /* created */, true /* throttled */
+			// Abort if we have exceeded limit of unique statement fingerprints.
+			if incrementedFingerprintCount > limit {
+				atomic.AddInt64(s.atomic.uniqueStmtFingerprintCount, -int64(1) /* delts */)
+				return stats, false /* created */, true /* throttled */
+			}
 		}
 
 		stats = &stmtStats{}
@@ -447,16 +482,21 @@ func (s *Container) getStatsForTxnWithKey(
 	// exist yet.
 	stats, ok := s.mu.txns[key]
 	if !ok && createIfNonexistent {
-		limit := s.uniqueTxnFingerprintLimit.Get(&s.st.SV)
-		incrementedFingerprintCount :=
-			atomic.AddInt64(s.atomic.uniqueTxnFingerprintCount, int64(1) /* delts */)
 
-		// If we have exceeded limit of fingerprint count, decrement the counter
-		// and abort.
-		if incrementedFingerprintCount > limit {
-			atomic.AddInt64(s.atomic.uniqueTxnFingerprintCount, -int64(1) /* delts */)
-			return nil /* stats */, false /* created */, true /* throttled */
+		// TODO marylia add comment here
+		if s.uniqueTxnFingerprintLimit != nil {
+			limit := s.uniqueTxnFingerprintLimit.Get(&s.st.SV)
+			incrementedFingerprintCount :=
+				atomic.AddInt64(s.atomic.uniqueTxnFingerprintCount, int64(1) /* delts */)
+
+			// If we have exceeded limit of fingerprint count, decrement the counter
+			// and abort.
+			if incrementedFingerprintCount > limit {
+				atomic.AddInt64(s.atomic.uniqueTxnFingerprintCount, -int64(1) /* delts */)
+				return nil /* stats */, false /* created */, true /* throttled */
+			}
 		}
+
 		stats = &txnStats{}
 		stats.statementFingerprintIDs = stmtFingerprintIDs
 		s.mu.txns[key] = stats
@@ -673,6 +713,6 @@ type transactionCounts struct {
 
 func constructStatementFingerprintIDFromStmtKey(key stmtKey) roachpb.StmtFingerprintID {
 	return roachpb.ConstructStatementFingerprintID(
-		key.anonymizedStmt, key.failed, key.implicitTxn, key.database,
+		key.anonymizedStmt, key.failed, key.implicitTxn, key.database, key.txnID,
 	)
 }

@@ -144,6 +144,7 @@ func (ih *instrumentationHelper) Setup(
 	fingerprint string,
 	implicitTxn bool,
 	collectTxnExecStats bool,
+	txnFingerprintID string,
 ) (newCtx context.Context, needFinish bool) {
 	ih.fingerprint = fingerprint
 	ih.implicitTxn = implicitTxn
@@ -169,7 +170,7 @@ func (ih *instrumentationHelper) Setup(
 	ih.withStatementTrace = cfg.TestingKnobs.WithStatementTrace
 
 	ih.savePlanForStats =
-		statsCollector.ShouldSaveLogicalPlanDesc(fingerprint, implicitTxn, p.SessionData().Database)
+		statsCollector.ShouldSaveLogicalPlanDesc(fingerprint, implicitTxn, p.SessionData().Database, txnFingerprintID)
 
 	if sp := tracing.SpanFromContext(ctx); sp != nil {
 		if sp.IsVerbose() {

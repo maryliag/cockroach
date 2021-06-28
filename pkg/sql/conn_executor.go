@@ -680,7 +680,7 @@ func (s *Server) newConnExecutor(
 	clientComm ClientComm,
 	memMetrics MemoryMetrics,
 	srvMetrics *Metrics,
-	statsWriter sqlstats.Writer,
+	statsWriter sqlstats.WriterIterator,
 ) *connExecutor {
 	// Create the various monitors.
 	// The session monitors are started in activate().
@@ -762,10 +762,12 @@ func (s *Server) newConnExecutor(
 
 	ex.applicationName.Store(ex.sessionData.ApplicationName)
 	ex.statsWriter = statsWriter
-	ex.statsCollector = sslocal.NewStatsCollector(statsWriter, ex.phaseTimes)
+	// TODO marylia check better way to get settings
+	ex.statsCollector = sslocal.NewStatsCollector(statsWriter, ex.phaseTimes, ex.server.cfg.Settings)
 	sdMutator.RegisterOnSessionDataChange("application_name", func(newName string) {
 		ex.applicationName.Store(newName)
 		ex.statsWriter = ex.server.sqlStats.GetWriterForApplication(newName)
+		ex.statsCollector.ResetWriter(ctx, ex.statsWriter)
 	})
 
 	ex.phaseTimes.SetSessionPhaseTime(sessionphase.SessionInit, timeutil.Now())
@@ -816,7 +818,7 @@ func (s *Server) newConnExecutorWithTxn(
 	srvMetrics *Metrics,
 	txn *kv.Txn,
 	syntheticDescs []catalog.Descriptor,
-	statsWriter sqlstats.Writer,
+	statsWriter sqlstats.WriterIterator,
 ) *connExecutor {
 	ex := s.newConnExecutor(ctx, sd, sdDefaults, stmtBuf, clientComm, memMetrics, srvMetrics, statsWriter)
 	if txn.Type() == kv.LeafTxn {
@@ -1207,7 +1209,7 @@ type connExecutor struct {
 	// statsWriter is a writer interface for recording per-application SQL usage
 	// statistics. It is maintained to represent statistics for the application
 	// currently identified by sessiondata.ApplicationName.
-	statsWriter sqlstats.Writer
+	statsWriter sqlstats.WriterIterator
 
 	// statsCollector is used to collect statistics about SQL statements and
 	// transactions.
@@ -2055,7 +2057,7 @@ func (ex *connExecutor) execCopyIn(
 		// state machine, but the copyMachine manages its own transactions without
 		// going through the state machine.
 		ex.state.sqlTimestamp = txnTS
-		ex.statsCollector.Reset(ex.statsWriter, ex.phaseTimes)
+		ex.statsCollector.ResetTimes(ex.phaseTimes)
 		ex.initPlanner(ctx, p)
 		ex.resetPlanner(ctx, p, txn, stmtTS)
 	}

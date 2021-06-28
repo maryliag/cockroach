@@ -88,7 +88,7 @@ func (ex *connExecutor) execStmt(
 	// Run observer statements in a separate code path; their execution does not
 	// depend on the current transaction state.
 	if _, ok := ast.(tree.ObserverStatement); ok {
-		ex.statsCollector.Reset(ex.statsWriter, ex.phaseTimes)
+		ex.statsCollector.ResetTimes(ex.phaseTimes)
 		err := ex.runObserverStatement(ctx, ast, res)
 		// Note that regardless of res.Err(), these observer statements don't
 		// generate error events; transactions are always allowed to continue.
@@ -360,7 +360,7 @@ func (ex *connExecutor) execStmtInOpenState(
 
 	p := &ex.planner
 	stmtTS := ex.server.cfg.Clock.PhysicalTime()
-	ex.statsCollector.Reset(ex.statsWriter, ex.phaseTimes)
+	ex.statsCollector.ResetTimes(ex.phaseTimes)
 	ex.resetPlanner(ctx, p, ex.state.mu.txn, stmtTS)
 	p.sessionDataMutator.paramStatusUpdater = res
 	p.noticeSender = res
@@ -442,6 +442,7 @@ func (ex *connExecutor) execStmtInOpenState(
 	ctx, needFinish = ih.Setup(
 		ctx, ex.server.cfg, ex.statsCollector, p, ex.stmtDiagnosticsRecorder,
 		stmt.AnonymizedStr, os.ImplicitTxn.Get(), ex.extraTxnState.shouldCollectTxnExecutionStats,
+		ex.state.mu.txn.ID().String(),
 	)
 	if needFinish {
 		sql := stmt.SQL
@@ -975,6 +976,7 @@ func (ex *connExecutor) dispatchToExecutionEngine(
 	ex.recordStatementSummary(
 		ctx, planner,
 		ex.extraTxnState.autoRetryCounter, res.RowsAffected(), res.Err(), stats,
+		ex.state.mu.txn.ID().String(),
 	)
 	if ex.server.cfg.TestingKnobs.AfterExecute != nil {
 		ex.server.cfg.TestingKnobs.AfterExecute(ctx, stmt.String(), res.Err())
@@ -1147,7 +1149,7 @@ func (ex *connExecutor) beginTransactionTimestampsAndReadMode(
 		rwMode = ex.readWriteModeWithSessionDefault(modes.ReadWriteMode)
 		return rwMode, now, nil, nil
 	}
-	ex.statsCollector.Reset(ex.statsWriter, ex.phaseTimes)
+	ex.statsCollector.ResetTimes(ex.phaseTimes)
 	p := &ex.planner
 
 	// NB: this use of p.txn is totally bogus. The planner's txn should
@@ -1566,6 +1568,7 @@ func (ex *connExecutor) recordTransactionStart() (
 	txnStart := ex.state.mu.txnStart
 	ex.state.mu.RUnlock()
 	implicit := ex.implicitTxn()
+	ex.statsCollector.SetImplicit(implicit, ex.server.cfg.Settings)
 
 	// Transaction received time is the time at which the statement that prompted
 	// the creation of this transaction was received.
@@ -1639,11 +1642,16 @@ func (ex *connExecutor) recordTransaction(
 		BytesRead:               ex.extraTxnState.bytesRead,
 	}
 
-	return ex.statsCollector.RecordTransaction(
+	err := ex.statsCollector.RecordTransaction(
 		ctx,
 		roachpb.TransactionFingerprintID(ex.extraTxnState.transactionStatementsHash.Sum()),
 		recordedTxnStats,
 	)
+	if err != nil {
+		return err
+	}
+
+	return ex.statsCollector.Finalize(ctx)
 }
 
 // createRootOrChildSpan is used to create spans for txns and stmts. It inspects

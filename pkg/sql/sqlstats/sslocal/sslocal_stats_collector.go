@@ -11,12 +11,19 @@
 package sslocal
 
 import (
+	"context"
+
+	"github.com/cockroachdb/cockroach/pkg/settings/cluster"
 	"github.com/cockroachdb/cockroach/pkg/sql/sessionphase"
 	"github.com/cockroachdb/cockroach/pkg/sql/sqlstats"
+	"github.com/cockroachdb/cockroach/pkg/sql/sqlstats/ssmemstorage"
 )
 
 type statsCollector struct {
-	sqlstats.Writer
+	sqlstats.WriterIterator
+
+	// aggregatedStorage has aggregated data ready to be flushed.
+	aggregatedStorage sqlstats.WriterIterator
 
 	// phaseTimes tracks session-level phase times.
 	phaseTimes *sessionphase.Times
@@ -24,17 +31,26 @@ type statsCollector struct {
 	// previousPhaseTimes tracks the session-level phase times for the previous
 	// query. This enables the `SHOW LAST QUERY STATISTICS` observer statement.
 	previousPhaseTimes *sessionphase.Times
+
+	// isImplicit tracks is the transaction is explicit or implicit.
+	isImplicit bool
+
+	// TODO marylia
+	settings *cluster.Settings
 }
 
 var _ sqlstats.StatsCollector = &statsCollector{}
 
 // NewStatsCollector returns an instance of sqlstats.StatsCollector.
 func NewStatsCollector(
-	writer sqlstats.Writer, phaseTime *sessionphase.Times,
+	writer sqlstats.WriterIterator, phaseTime *sessionphase.Times, st *cluster.Settings,
 ) sqlstats.StatsCollector {
 	return &statsCollector{
-		Writer:     writer,
-		phaseTimes: phaseTime.Clone(),
+		WriterIterator:    writer,
+		phaseTimes:        phaseTime.Clone(),
+		aggregatedStorage: nil,
+		isImplicit:        true,
+		settings:          st,
 	}
 }
 
@@ -48,12 +64,83 @@ func (s *statsCollector) PreviousPhaseTimes() *sessionphase.Times {
 	return s.previousPhaseTimes
 }
 
-// Reset implements sqlstats.StatsCollector interface.
-func (s *statsCollector) Reset(writer sqlstats.Writer, phaseTime *sessionphase.Times) {
-	previousPhaseTime := s.phaseTimes
-	*s = statsCollector{
-		Writer:             writer,
-		previousPhaseTimes: previousPhaseTime,
-		phaseTimes:         phaseTime.Clone(),
+// IsImplicit implements sqlstats.StatsCollector interface.
+func (s *statsCollector) IsImplicit() bool {
+	return s.isImplicit
+}
+
+// SetImplicit implements sqlstats.StatsCollector interface.
+func (s *statsCollector) SetImplicit(isImplicit bool, st *cluster.Settings) {
+	s.isImplicit = isImplicit
+
+	if !isImplicit {
+		s.aggregatedStorage = s.WriterIterator
+		// TODO marylia
+		s.WriterIterator = ssmemstorage.NewTemporaryContainer(st)
 	}
+}
+
+//func (s *statsCollector) RecordTransaction(
+//	ctx context.Context, key roachpb.TransactionFingerprintID, value sqlstats.RecordedTxnStats,
+//) error {
+//	err := s.Container.RecordTransaction(ctx, key, value)
+//	if err != nil {
+//		return err
+//	}
+//	if s.isImplicit {
+//		return nil
+//	}
+//
+//	// TODO marylia rewrite txnid for all statements
+//
+//	return s.aggregatedStorage.Add(ctx, s.Container)
+//}
+
+// ResetWriter implements sqlstats.StatsCollector interface.
+func (s *statsCollector) ResetWriter(ctx context.Context, writer sqlstats.WriterIterator) {
+	if s.isImplicit {
+		*s = statsCollector{
+			WriterIterator:     writer,
+			previousPhaseTimes: s.previousPhaseTimes,
+			phaseTimes:         s.phaseTimes,
+			aggregatedStorage:  s.aggregatedStorage,
+			isImplicit:         true,
+		}
+	} else {
+		s.Finalize(ctx)
+		*s = statsCollector{
+			WriterIterator:     ssmemstorage.NewTemporaryContainer(s.settings),
+			previousPhaseTimes: s.previousPhaseTimes,
+			phaseTimes:         s.phaseTimes,
+			aggregatedStorage:  writer,
+			isImplicit:         false,
+		}
+	}
+}
+
+// ResetTimes implements sqlstats.StatsCollector interface.
+func (s *statsCollector) ResetTimes(phaseTime *sessionphase.Times) {
+	*s = statsCollector{
+		WriterIterator:     s.WriterIterator,
+		previousPhaseTimes: s.phaseTimes,
+		phaseTimes:         phaseTime.Clone(),
+		aggregatedStorage:  s.aggregatedStorage,
+		isImplicit:         s.isImplicit,
+	}
+}
+
+// Finalize implements sqlstats.StatsCollector interface.
+func (s *statsCollector) Finalize(ctx context.Context) error {
+	if !s.isImplicit {
+		s.aggregatedStorage.Merge(s.WriterIterator, ctx)
+
+		*s = statsCollector{
+			WriterIterator:     s.aggregatedStorage,
+			previousPhaseTimes: s.previousPhaseTimes,
+			phaseTimes:         s.phaseTimes,
+			aggregatedStorage:  s.aggregatedStorage,
+			isImplicit:         s.isImplicit,
+		}
+	}
+	return nil
 }

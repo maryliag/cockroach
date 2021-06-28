@@ -18,6 +18,7 @@ import (
 	"time"
 
 	"github.com/cockroachdb/cockroach/pkg/roachpb"
+	"github.com/cockroachdb/cockroach/pkg/settings/cluster"
 	"github.com/cockroachdb/cockroach/pkg/sql/execstats"
 	"github.com/cockroachdb/cockroach/pkg/sql/sem/tree"
 	"github.com/cockroachdb/cockroach/pkg/sql/sessionphase"
@@ -36,7 +37,7 @@ type StatementWriter interface {
 
 	// ShouldSaveLogicalPlanDesc returns whether we should save the logical plan
 	// description for a given combination of statement metadata.
-	ShouldSaveLogicalPlanDesc(fingerprint string, implicitTxn bool, database string) bool
+	ShouldSaveLogicalPlanDesc(fingerprint string, implicitTxn bool, database string, txnFingerprintID string) bool
 }
 
 // TransactionWriter is the interface that provides methods to record
@@ -50,14 +51,11 @@ type TransactionWriter interface {
 type Writer interface {
 	StatementWriter
 	TransactionWriter
+
+	Merge(other Iterators, ctx context.Context)
 }
 
-// Reader provides methods to retrieve transaction/statement statistics from
-// the Storage.
-type Reader interface {
-	// GetLastReset returns the last time when the sqlstats is being reset.
-	GetLastReset() time.Time
-
+type Iterators interface {
 	// IterateStatementStats iterates through all the collected statement statistics
 	// by using StatementVisitor. Caller can specify iteration behavior, such
 	// as ordering, through IteratorOptions argument. StatementVisitor can return
@@ -73,7 +71,19 @@ type Reader interface {
 	// IterateAggregatedTransactionStats iterates through all the collected app-level
 	// transactions statistics. It behaves similarly to IterateStatementStats.
 	IterateAggregatedTransactionStats(context.Context, *IteratorOptions, AggregatedTransactionVisitor) error
+}
 
+type WriterIterator interface {
+	Writer
+	Iterators
+}
+
+// Reader provides methods to retrieve transaction/statement statistics from
+// the Storage.
+type Reader interface {
+	Iterators
+	// GetLastReset returns the last time when the sqlstats is being reset.
+	GetLastReset() time.Time
 	// GetStatementStats performs a point lookup of statement statistics for a
 	// given key.
 	GetStatementStats(key *roachpb.StatementStatisticsKey) (*roachpb.CollectedStatementStatistics, error)
@@ -116,7 +126,7 @@ type AggregatedTransactionVisitor func(appName string, statistics *roachpb.TxnSt
 // StatsCollector is an interface that collects statistics for transactions and
 // statements for the entire lifetime of a session.
 type StatsCollector interface {
-	Writer
+	WriterIterator
 
 	// PhaseTimes returns the sessionphase.Times that this StatsCollector is
 	// currently tracking.
@@ -126,9 +136,22 @@ type StatsCollector interface {
 	// was previously tracking before being Reset.
 	PreviousPhaseTimes() *sessionphase.Times
 
-	// Reset resets the StatsCollector with a new Writer and a new copy of the
+	// IsImplicit tracks if the transaction is implicit.
+	IsImplicit() bool
+
+	// Finalize transfer data from temp storage to main storage.
+	Finalize(context.Context) error
+
+	// SetImplicit sets the value isImplicit
+	SetImplicit(bool, *cluster.Settings)
+
+	// ResetWriter resets the StatsCollector with a new Writer and a new copy of the
 	// sessionphase.Times.
-	Reset(Writer, *sessionphase.Times)
+	ResetWriter(context.Context, WriterIterator)
+
+	// ResetTimes resets the StatsCollector with a new copy of the
+	// sessionphase.Times.
+	ResetTimes(*sessionphase.Times)
 }
 
 // Storage provides clients with interface to perform read and write operations
@@ -138,7 +161,7 @@ type Storage interface {
 
 	// GetWriterForApplication returns a Writer instance for the given application
 	// name.
-	GetWriterForApplication(appName string) Writer
+	GetWriterForApplication(appName string) WriterIterator
 
 	// Reset resets all the statistics stored in-memory in the current Storage.
 	Reset(context.Context) error

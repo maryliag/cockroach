@@ -88,6 +88,7 @@ func (ex *connExecutor) recordStatementSummary(
 	rowsAffected int,
 	stmtErr error,
 	stats topLevelQueryStats,
+	txnFingerprintID string,
 ) {
 	phaseTimes := ex.statsCollector.PhaseTimes()
 
@@ -128,13 +129,14 @@ func (ex *connExecutor) recordStatementSummary(
 	}
 
 	recordedStmtStatsKey := roachpb.StatementStatisticsKey{
-		Query:       stmt.AnonymizedStr,
-		DistSQL:     flags.IsDistributed(),
-		Vec:         flags.IsSet(planFlagVectorized),
-		ImplicitTxn: flags.IsSet(planFlagImplicitTxn),
-		FullScan:    flags.IsSet(planFlagContainsFullIndexScan) || flags.IsSet(planFlagContainsFullTableScan),
-		Failed:      stmtErr != nil,
-		Database:    planner.SessionData().Database,
+		Query:            stmt.AnonymizedStr,
+		DistSQL:          flags.IsDistributed(),
+		Vec:              flags.IsSet(planFlagVectorized),
+		ImplicitTxn:      flags.IsSet(planFlagImplicitTxn),
+		FullScan:         flags.IsSet(planFlagContainsFullIndexScan) || flags.IsSet(planFlagContainsFullTableScan),
+		Failed:           stmtErr != nil,
+		Database:         planner.SessionData().Database,
+		TxnFingerprintId: txnFingerprintID,
 	}
 
 	recordedStmtStats := sqlstats.RecordedStmtStats{

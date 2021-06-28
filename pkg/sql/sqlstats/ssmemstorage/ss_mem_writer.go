@@ -23,6 +23,62 @@ import (
 
 var _ sqlstats.Writer = &Container{}
 
+func (s *Container) Merge(other sqlstats.Iterators, ctx context.Context) {
+	other.IterateStatementStats(ctx, &sqlstats.IteratorOptions{}, func(stats *roachpb.CollectedStatementStatistics) error {
+		createIfNonExistent := true
+		// If the statement is below the latency threshold, or stats aren't being
+		// recorded we don't need to create an entry in the stmts map for it. We do
+		// still need stmtFingerprintID for transaction level metrics tracking.
+		t := sqlstats.StatsCollectionLatencyThreshold.Get(&s.st.SV)
+		if !sqlstats.StmtStatsEnable.Get(&s.st.SV) || (t > 0 && t.Seconds() >= stats.Stats.ServiceLat.Mean) {
+			createIfNonExistent = false
+		}
+
+		// TODO marylia change fingerprint id here
+		stmtStatsTemp, _, _, _, throttled := s.getStatsForStmt(
+			stats.Key.Query, stats.Key.ImplicitTxn, stats.Key.Database, stats.Key.TxnFingerprintId,
+			stats.Key.Failed, createIfNonExistent,
+		)
+
+		if throttled {
+			return errors.New("unique fingerprint limit has been reached")
+		}
+
+		stmtStatsTemp.mu.Lock()
+		stmtStatsTemp.mu.data.Add(&stats.Stats)
+		stmtStatsTemp.mu.Unlock()
+
+		// TODO marylia return error
+		return nil
+	})
+	//ex.extraTxnState.transactionStatementsHash.Sum()
+	other.IterateTransactionStats(ctx, &sqlstats.IteratorOptions{}, func(id roachpb.TransactionFingerprintID, statistics *roachpb.CollectedTransactionStatistics) error {
+		createIfNonExistent := true
+		t := sqlstats.StatsCollectionLatencyThreshold.Get(&s.st.SV)
+		if !sqlstats.StmtStatsEnable.Get(&s.st.SV) || (t > 0 && t.Seconds() >= statistics.Stats.ServiceLat.Mean) {
+			createIfNonExistent = false
+		}
+
+		txnKey := roachpb.TransactionFingerprintID(len(statistics.StatementFingerprintIDs))
+		txnStatsTemp, _, throttled := s.getStatsForTxnWithKey(txnKey, statistics.StatementFingerprintIDs, createIfNonExistent)
+
+		if throttled {
+			return errors.New("unique fingerprint limit has been reached")
+		}
+
+		txnStatsTemp.mu.Lock()
+		txnStatsTemp.mu.data.Add(&statistics.Stats)
+		txnStatsTemp.mu.Unlock()
+
+		// TODO marylia return error
+		return nil
+
+	})
+
+	//other.IterateTransactionStats()
+
+}
+
 // RecordStatement implements sqlstats.Writer interface.
 // RecordStatement saves per-statement statistics.
 //
@@ -52,7 +108,7 @@ func (s *Container) RecordStatement(
 
 	// Get the statistics object.
 	stats, statementKey, stmtFingerprintID, created, throttled := s.getStatsForStmt(
-		key.Query, key.ImplicitTxn, key.Database,
+		key.Query, key.ImplicitTxn, key.Database, key.TxnFingerprintId,
 		key.Failed, createIfNonExistent,
 	)
 
@@ -108,8 +164,10 @@ func (s *Container) RecordStatement(
 	stats.mu.distSQLUsed = key.DistSQL
 	stats.mu.fullScan = key.FullScan
 	stats.mu.database = key.Database
+	stats.mu.txnFingerprintID = key.TxnFingerprintId
 
-	if created {
+	// TODO marylia add comment for memory
+	if created && s.mu.acc.Monitor() != nil {
 		// stats size + stmtKey size + hash of the statementKey
 		estimatedMemoryAllocBytes := stats.sizeUnsafe() + statementKey.size() + 8
 		s.mu.Lock()
@@ -130,7 +188,7 @@ func (s *Container) RecordStatementExecStats(
 	key roachpb.StatementStatisticsKey, stats execstats.QueryLevelStats,
 ) error {
 	stmtStats, _, _, _, _ :=
-		s.getStatsForStmt(key.Query, key.ImplicitTxn, key.Database, key.Failed, false /* createIfNotExists */)
+		s.getStatsForStmt(key.Query, key.ImplicitTxn, key.Database, key.TxnFingerprintId, key.Failed, false /* createIfNotExists */)
 	if stmtStats == nil {
 		return errors.New("stmtStats flushed before execution stats can be recorded")
 	}
@@ -140,10 +198,10 @@ func (s *Container) RecordStatementExecStats(
 
 // ShouldSaveLogicalPlanDesc implements sqlstats.Writer interface.
 func (s *Container) ShouldSaveLogicalPlanDesc(
-	fingerprint string, implicitTxn bool, database string,
+	fingerprint string, implicitTxn bool, database string, txnFingerprintID string,
 ) bool {
 	stmtStats, _, _, _, _ :=
-		s.getStatsForStmt(fingerprint, implicitTxn, database, false /* failed */, false /* createIfNotExists */)
+		s.getStatsForStmt(fingerprint, implicitTxn, database, txnFingerprintID, false /* failed */, false /* createIfNotExists */)
 	return s.shouldSaveLogicalPlanDescription(stmtStats)
 }
 
@@ -181,7 +239,8 @@ func (s *Container) RecordTransaction(
 	// return the memory allocation error.
 	// If the entry is not created, this means we have reached the limit of unique
 	// fingerprints for this app. We also abort the operation and return an error.
-	if created {
+	// TODO marylia add comment for memory nil
+	if created && s.mu.acc.Monitor() != nil {
 		estimatedMemAllocBytes :=
 			stats.sizeUnsafe() + key.Size() + 8 /* hash of transaction key */
 		s.mu.Lock()
