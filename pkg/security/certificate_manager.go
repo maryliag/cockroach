@@ -990,6 +990,7 @@ func (cm *CertificateManager) GetTenantClientTLSConfig() (*tls.Config, error) {
 		return nil, err
 	}
 
+	cfg.InsecureSkipVerify = true
 	cm.tenantClientConfig = cfg
 	return cfg, nil
 }
