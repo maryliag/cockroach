@@ -148,6 +148,7 @@ export interface StatementDetailsStateProps {
   nodeRegions: { [nodeId: string]: string };
   diagnosticsReports: cockroach.server.serverpb.IStatementDiagnosticsReport[];
   uiConfig?: UIConfigState["pages"]["statementDetails"];
+  isTenant?: UIConfigState["isTenant"];
 }
 
 export type StatementDetailsOwnProps = StatementDetailsDispatchProps &
@@ -318,6 +319,7 @@ export class StatementDetails extends React.Component<
     uiConfig: {
       showStatementDiagnosticsLink: true,
     },
+    isTenant: false,
   };
 
   changeSortSetting = (ss: SortSetting) => {
