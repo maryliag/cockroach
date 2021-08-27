@@ -83,6 +83,10 @@ export class TransactionsPage extends React.Component<
   TransactionsPageProps,
   TState
 > {
+  static defaultProps: Partial<TransactionsPageProps> = {
+    isTenant: false,
+  };
+
   trxSearchParams = getSearchParams(this.props.history.location.search);
   filters = getFiltersFromQueryString(this.props.history.location.search);
   state: TState = {
