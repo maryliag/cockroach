@@ -129,6 +129,20 @@ func (s *StatsCollector) ShouldSaveLogicalPlanDesc(
 		s.ApplicationStats.ShouldSaveLogicalPlanDesc(fingerprint, implicitTxn, database)
 }
 
+// ShouldGenerateIndexRecommendation implements sqlstats.StatsCollector interface.
+func (s *StatsCollector) ShouldGenerateIndexRecommendation(
+	fingerprint string, planHash uint64, database string,
+) bool {
+	return s.ApplicationStats.ShouldGenerateIndexRecommendation(fingerprint, planHash, database)
+}
+
+// UpdateIndexRecommendations implements sqlstats.StatsCollector interface.
+func (s *StatsCollector) UpdateIndexRecommendations(
+	fingerprint string, planHash uint64, database string, recommendations []string, reset bool,
+) []string {
+	return s.ApplicationStats.UpdateIndexRecommendations(fingerprint, planHash, database, recommendations, reset)
+}
+
 // UpgradeImplicitTxn implements sqlstats.StatsCollector interface.
 func (s *StatsCollector) UpgradeImplicitTxn(ctx context.Context) error {
 	err := s.ApplicationStats.IterateStatementStats(ctx, &sqlstats.IteratorOptions{},

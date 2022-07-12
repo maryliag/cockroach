@@ -71,6 +71,23 @@ func (s stmtKey) size() int64 {
 
 const invalidStmtFingerprintID = 0
 
+// indexRecKey is used to determine if we should generate an index recommendation.
+type indexRecKey struct {
+	stmtNoConstants string
+	database        string
+	planHash        uint64
+}
+
+type indexRecInfo struct {
+	lastGeneratedTs time.Time
+	recommendations []string
+	executionCount  int64
+}
+
+func (p indexRecKey) size() int64 { // TODO (marylia) check if used
+	return int64(unsafe.Sizeof(p)) + int64(len(p.stmtNoConstants)) + int64(len(p.database))
+}
+
 // Container holds per-application statement and transaction statistics.
 type Container struct {
 	st      *cluster.Settings
@@ -114,6 +131,11 @@ type Container struct {
 		// sampled for a statement without needing to know the statement's
 		// transaction fingerprintID.
 		sampledPlanMetadataCache map[sampledPlanKey]time.Time
+
+		// indexRecommendationsCache records the index recommendations. This data uses a
+		// subset of stmtKey as the key into in-memory dictionary in order to lookup
+		// if statements with this same key already had index recommendations generated.
+		indexRecommendationsCache map[indexRecKey]indexRecInfo
 	}
 
 	txnCounts transactionCounts
@@ -154,6 +176,7 @@ func New(
 	s.mu.stmts = make(map[stmtKey]*stmtStats)
 	s.mu.txns = make(map[roachpb.TransactionFingerprintID]*txnStats)
 	s.mu.sampledPlanMetadataCache = make(map[sampledPlanKey]time.Time)
+	s.mu.indexRecommendationsCache = make(map[indexRecKey]indexRecInfo)
 
 	s.atomic.uniqueStmtFingerprintCount = uniqueStmtFingerprintCount
 	s.atomic.uniqueTxnFingerprintCount = uniqueTxnFingerprintCount
@@ -627,7 +650,7 @@ func (s *Container) SaveToLog(ctx context.Context, appName string) {
 
 // Clear clears the data stored in this Container and prepare the Container
 // for reuse.
-func (s *Container) Clear(ctx context.Context) {
+func (s *Container) Clear(ctx context.Context, clearRecCache bool) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -638,6 +661,22 @@ func (s *Container) Clear(ctx context.Context) {
 	s.mu.stmts = make(map[stmtKey]*stmtStats, len(s.mu.stmts)/2)
 	s.mu.txns = make(map[roachpb.TransactionFingerprintID]*txnStats, len(s.mu.txns)/2)
 	s.mu.sampledPlanMetadataCache = make(map[sampledPlanKey]time.Time, len(s.mu.sampledPlanMetadataCache)/2)
+
+	if clearRecCache {
+		s.mu.indexRecommendationsCache = make(map[indexRecKey]indexRecInfo, len(s.mu.indexRecommendationsCache)/2)
+	}
+}
+
+func (s *Container) ClearOlderIndexRecommendationsCache(ctx context.Context) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	for key, value := range s.mu.indexRecommendationsCache {
+		if s.getTimeNow().Sub(value.lastGeneratedTs).Hours() >= 24 {
+			delete(s.mu.indexRecommendationsCache, key)
+		}
+	}
+
 }
 
 // Free frees the accounted resources from the Container. The Container is
@@ -964,4 +1003,35 @@ func constructStatementFingerprintIDFromStmtKey(key stmtKey) roachpb.StmtFingerp
 	return roachpb.ConstructStatementFingerprintID(
 		key.stmtNoConstants, key.failed, key.implicitTxn, key.database,
 	)
+}
+
+func (s *Container) getIndexRecommendation(key indexRecKey) (indexRecInfo, bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	recInfo, found := s.mu.indexRecommendationsCache[key]
+
+	return recInfo, found
+}
+
+func (s *Container) setIndexRecommendations(
+	key indexRecKey, time time.Time, recommendations []string, execCount int64,
+) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.mu.indexRecommendationsCache[key] = indexRecInfo{
+		lastGeneratedTs: time,
+		recommendations: recommendations,
+		executionCount:  execCount,
+	}
+}
+
+// Should generate a new index recommendation if there was no generation in the past hour
+// and there is at least 5 executions.
+func (s *Container) shouldGenerateIndexRecommendation(recInfo indexRecInfo) bool {
+	if !sqlstats.SampleIndexRecommendation.Get(&s.st.SV) {
+		return false
+	}
+	timeSinceLastGenerated := s.getTimeNow().Sub(recInfo.lastGeneratedTs)
+	return recInfo.executionCount >= 5 && timeSinceLastGenerated.Hours() >= 1
 }

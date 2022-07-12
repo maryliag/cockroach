@@ -43,6 +43,15 @@ type Writer interface {
 
 	// RecordTransaction records statistics for a transaction.
 	RecordTransaction(ctx context.Context, key roachpb.TransactionFingerprintID, value RecordedTxnStats) error
+
+	// ShouldGenerateIndexRecommendation returns whether we should generate index recommendations
+	// for a given combination of statement metadata.
+	ShouldGenerateIndexRecommendation(fingerprint string, planHash uint64, database string) bool
+
+	// UpdateIndexRecommendations update the index recommendations cache. If the reset is true is will reset the count
+	// and update the list of recommendations, otherwise it will just increase the execution count value.
+	UpdateIndexRecommendations(fingerprint string, planHash uint64, database string, recommendations []string,
+		reset bool) []string
 }
 
 // Reader provides methods to retrieve transaction/statement statistics from

@@ -127,7 +127,7 @@ type instrumentationHelper struct {
 	costEstimate float64
 
 	// indexRecommendations is a string slice containing index recommendations for
-	// the planned statement. This is only set for EXPLAIN statements.
+	// the planned statement. This is set for EXPLAIN statements and during stats collection.
 	indexRecommendations []string
 }
 
@@ -242,6 +242,38 @@ func (ih *instrumentationHelper) Setup(
 	return newCtx, true
 }
 
+// SetIndexRecommendations check if we should generate a new index recommendation.
+// If true it will generate, if false, use the value on index recommendations cache.
+func (ih *instrumentationHelper) SetIndexRecommendations(
+	statsCollector sqlstats.StatsCollector,
+	p *planner, ) {
+	ctx := ih.origCtx
+
+	if statsCollector.ShouldGenerateIndexRecommendation(ih.fingerprint, ih.planGist.Hash(), p.SessionData().Database) {
+		opc := &p.optPlanningCtx
+		err := opc.makeQueryIndexRecommendation()
+		if err != nil {
+			log.Warningf(ctx, "unable to generate index recommendations: %s", err)
+		} else {
+			statsCollector.UpdateIndexRecommendations(
+				ih.fingerprint,
+				ih.planGist.Hash(),
+				p.SessionData().Database,
+				ih.indexRecommendations,
+				true,
+			)
+		}
+	} else {
+		ih.indexRecommendations = statsCollector.UpdateIndexRecommendations(
+			ih.fingerprint,
+			ih.planGist.Hash(),
+			p.SessionData().Database,
+			[]string{},
+			false,
+		)
+	}
+}
+
 func (ih *instrumentationHelper) Finish(
 	cfg *ExecutorConfig,
 	statsCollector sqlstats.StatsCollector,
@@ -257,6 +289,8 @@ func (ih *instrumentationHelper) Finish(
 	if ih.sp == nil {
 		return retErr
 	}
+
+	ih.SetIndexRecommendations(statsCollector, p)
 
 	// Record the statement information that we've collected.
 	// Note that in case of implicit transactions, the trace contains the auto-commit too.

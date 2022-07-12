@@ -72,6 +72,7 @@ func (s *PersistedSQLStats) Flush(ctx context.Context) {
 
 	s.flushStmtStats(ctx, aggregatedTs)
 	s.flushTxnStats(ctx, aggregatedTs)
+	s.SQLStats.ClearOlderIndexRecommendations(ctx)
 }
 
 func (s *PersistedSQLStats) flushStmtStats(ctx context.Context, aggregatedTs time.Time) {

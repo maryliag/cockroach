@@ -51,6 +51,20 @@ func (s *ApplicationStats) ShouldSaveLogicalPlanDesc(
 	return s.ApplicationStats.ShouldSaveLogicalPlanDesc(fingerprint, implicitTxn, database)
 }
 
+// ShouldGenerateIndexRecommendation implements sqlstats.ApplicationStats interface.
+func (s *ApplicationStats) ShouldGenerateIndexRecommendation(
+	fingerprint string, planHash uint64, database string,
+) bool {
+	return s.ApplicationStats.ShouldGenerateIndexRecommendation(fingerprint, planHash, database)
+}
+
+// UpdateIndexRecommendations implements sqlstats.ApplicationStats interface.
+func (s *ApplicationStats) UpdateIndexRecommendations(
+	fingerprint string, planHash uint64, database string, recommendations []string, reset bool,
+) []string {
+	return s.ApplicationStats.UpdateIndexRecommendations(fingerprint, planHash, database, recommendations, reset)
+}
+
 // RecordTransaction implements sqlstats.ApplicationStats interface and saves
 // per-transaction statistics.
 func (s *ApplicationStats) RecordTransaction(

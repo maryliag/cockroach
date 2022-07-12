@@ -172,6 +172,7 @@ func (s *SQLStats) resetAndMaybeDumpStats(ctx context.Context, target Sink) (err
 			statsContainer.SaveToLog(ctx, appName)
 		}
 
+		clearIndexRecCache := true
 		if target != nil {
 			lastErr := target.AddAppStats(ctx, appName, statsContainer)
 			// If we run out of memory budget, Container.Add() will merge stats in
@@ -182,9 +183,12 @@ func (s *SQLStats) resetAndMaybeDumpStats(ctx context.Context, target Sink) (err
 			if lastErr != nil {
 				err = lastErr
 			}
+			// If there is a target, we're doing a flush, and not a reset SQL stats.
+			// In that case, we want to keep the index recommendations cache.
+			clearIndexRecCache = false
 		}
 
-		statsContainer.Clear(ctx)
+		statsContainer.Clear(ctx, clearIndexRecCache)
 	}
 	s.mu.lastReset = timeutil.Now()
 
@@ -197,4 +201,10 @@ func (s *SQLStats) IterateOutliers(
 	ctx context.Context, visitor func(context.Context, *outliers.Outlier),
 ) {
 	s.outliers.IterateOutliers(ctx, visitor)
+}
+
+func (s *SQLStats) ClearOlderIndexRecommendations(ctx context.Context) {
+	for _, statsContainer := range s.mu.apps {
+		statsContainer.ClearOlderIndexRecommendationsCache(ctx)
+	}
 }

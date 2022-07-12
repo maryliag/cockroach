@@ -20,6 +20,7 @@ import (
 	"github.com/cockroachdb/cockroach/pkg/sql/sqlstats"
 	"github.com/cockroachdb/cockroach/pkg/sql/sqlstats/outliers"
 	"github.com/cockroachdb/cockroach/pkg/util"
+	"github.com/cockroachdb/cockroach/pkg/util/duration"
 	"github.com/cockroachdb/errors"
 )
 
@@ -141,9 +142,10 @@ func (s *Container) RecordStatement(
 		// stats size + stmtKey size + hash of the statementKey
 		estimatedMemoryAllocBytes := stats.sizeUnsafe() + statementKey.size() + 8
 
-		// We also accounts for the memory used for s.sampledPlanMetadataCache.
+		// We also account for the memory used for s.sampledPlanMetadataCache.
 		// timestamp size + key size + hash.
 		estimatedMemoryAllocBytes += timestampSize + statementKey.sampledPlanKey.size() + 8
+		// TODO (marylia) not sure how to account for the index rec cache size, since it's not a 1:1 relation
 		s.mu.Lock()
 		defer s.mu.Unlock()
 
@@ -200,6 +202,56 @@ func (s *Container) ShouldSaveLogicalPlanDesc(
 		database:        database,
 	})
 	return s.shouldSaveLogicalPlanDescription(lastSampled)
+}
+
+// ShouldGenerateIndexRecommendation implements sqlstats.Writer interface.
+func (s *Container) ShouldGenerateIndexRecommendation(
+	fingerprint string, planHash uint64, database string,
+) bool {
+	idxKey := indexRecKey{
+		stmtNoConstants: fingerprint,
+		database:        database,
+		planHash:        planHash,
+	}
+	recInfo, found := s.getIndexRecommendation(idxKey)
+	// If the statement is being executed for the first time,
+	// initialize it.
+	if !found {
+		s.setIndexRecommendations(idxKey, s.getTimeNow().Add(-duration.SecsPerDay*1e6), []string{}, 1)
+		recInfo, _ = s.getIndexRecommendation(idxKey)
+	}
+
+	return s.shouldGenerateIndexRecommendation(recInfo)
+}
+
+// UpdateIndexRecommendations implements sqlstats.ApplicationStats interface.
+func (s *Container) UpdateIndexRecommendations(
+	fingerprint string, planHash uint64, database string, recommendations []string, reset bool,
+) []string {
+	idxKey := indexRecKey{
+		stmtNoConstants: fingerprint,
+		database:        database,
+		planHash:        planHash,
+	}
+	// If reset is true, it has new recommendations, so update the recommendation value
+	// and reset the counter and last generation ts.
+	if reset {
+		s.setIndexRecommendations(idxKey, s.getTimeNow(), recommendations, 0)
+		return recommendations
+	}
+
+	// If reset is false, update just the counter.
+	recInfo, found := s.getIndexRecommendation(idxKey)
+	generatedTime := s.getTimeNow().Add(-duration.SecsPerHour * 1e6)
+	count := int64(1)
+	if found {
+		generatedTime = recInfo.lastGeneratedTs
+		recommendations = recInfo.recommendations
+		count = recInfo.executionCount + 1
+	}
+	s.setIndexRecommendations(idxKey, generatedTime, recommendations, count)
+
+	return recInfo.recommendations
 }
 
 // RecordTransaction implements sqlstats.Writer interface and saves
