@@ -91,7 +91,7 @@ func (idxRec *IndexRecCache) ShouldGenerateIndexRecommendation(
 	}
 
 	timeSinceLastGenerated := timeutil.Since(recInfo.lastGeneratedTs)
-	return recInfo.executionCount > 1 && timeSinceLastGenerated.Hours() >= 1
+	return recInfo.executionCount > 10 && timeSinceLastGenerated.Hours() >= 1
 }
 
 // UpdateIndexRecommendations updates the values for index recommendations.
