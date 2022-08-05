@@ -26,16 +26,17 @@ import (
 // recommendations info we can store in memory.
 var uniqueIndexRecInfoLimit *settings.IntSetting
 
-type indexRecKey struct {
-	stmtNoConstants string
-	database        string
-	planHash        uint64
+// IndexRecKey the key used for the recommendations cache.
+type IndexRecKey struct {
+	StmtNoConstants string
+	Database        string
+	PlanHash        uint64
 }
 
-type indexRecInfo struct {
-	lastGeneratedTs time.Time
-	recommendations []string
-	executionCount  int64
+// IndexRecInfo is the information saved on cache per recommendation.
+type IndexRecInfo struct {
+	LastGeneratedTs time.Time
+	Recommendations []string
 }
 
 // IndexRecCache stores the map of index recommendations keys (fingerprint, database, planHash) and
@@ -47,7 +48,7 @@ type IndexRecCache struct {
 		syncutil.RWMutex
 
 		// idxRecommendations stores index recommendations per indexRecKey.
-		idxRecommendations map[indexRecKey]indexRecInfo
+		idxRecommendations map[IndexRecKey]IndexRecInfo
 	}
 
 	atomic struct {
@@ -64,7 +65,7 @@ func NewIndexRecommendationsCache(
 	idxRecCache := &IndexRecCache{
 		st: setting,
 	}
-	idxRecCache.mu.idxRecommendations = make(map[indexRecKey]indexRecInfo)
+	idxRecCache.mu.idxRecommendations = make(map[IndexRecKey]IndexRecInfo)
 	uniqueIndexRecInfoLimit = uniqueIdxRecInfoLimit
 	return idxRecCache
 }
@@ -79,19 +80,18 @@ func (idxRec *IndexRecCache) ShouldGenerateIndexRecommendation(
 		return false
 	}
 
-	idxKey := indexRecKey{
-		stmtNoConstants: fingerprint,
-		database:        database,
-		planHash:        planHash,
+	idxKey := IndexRecKey{
+		StmtNoConstants: fingerprint,
+		Database:        database,
+		PlanHash:        planHash,
 	}
-	recInfo, found := idxRec.getOrCreateIndexRecommendation(idxKey)
+	recInfo, found := idxRec.GetOrCreateIndexRecommendation(idxKey)
 	// If we couldn't find or create, don't generate recommendations.
 	if !found {
 		return false
 	}
 
-	timeSinceLastGenerated := timeutil.Since(recInfo.lastGeneratedTs)
-	return recInfo.executionCount > 1 && timeSinceLastGenerated.Hours() >= 1
+	return timeutil.Since(recInfo.LastGeneratedTs).Hours() >= 1
 }
 
 // UpdateIndexRecommendations updates the values for index recommendations.
@@ -103,36 +103,19 @@ func (idxRec *IndexRecCache) UpdateIndexRecommendations(
 	database string,
 	stmtType tree.StatementType,
 	recommendations []string,
-	reset bool,
 ) []string {
 	if !idxRec.statementCanHaveRecommendation(stmtType) {
 		return recommendations
 	}
 
-	idxKey := indexRecKey{
-		stmtNoConstants: fingerprint,
-		database:        database,
-		planHash:        planHash,
+	idxKey := IndexRecKey{
+		StmtNoConstants: fingerprint,
+		Database:        database,
+		PlanHash:        planHash,
 	}
 
-	if reset {
-		idxRec.setIndexRecommendations(idxKey, timeutil.Now(), recommendations, 0)
-		return recommendations
-	}
-
-	recInfo, found := idxRec.getOrCreateIndexRecommendation(idxKey)
-	if !found {
-		return recommendations
-	}
-
-	idxRec.setIndexRecommendations(
-		idxKey,
-		recInfo.lastGeneratedTs,
-		recInfo.recommendations,
-		recInfo.executionCount+1,
-	)
-
-	return recInfo.recommendations
+	idxRec.setIndexRecommendations(idxKey, timeutil.Now(), recommendations)
+	return recommendations
 }
 
 // statementCanHaveRecommendation returns true if that type of statement can have recommendations
@@ -145,7 +128,7 @@ func (idxRec *IndexRecCache) statementCanHaveRecommendation(stmtType tree.Statem
 	return true
 }
 
-func (idxRec *IndexRecCache) getIndexRecommendation(key indexRecKey) (indexRecInfo, bool) {
+func (idxRec *IndexRecCache) getIndexRecommendation(key IndexRecKey) (IndexRecInfo, bool) {
 	idxRec.mu.RLock()
 	defer idxRec.mu.RUnlock()
 
@@ -154,7 +137,8 @@ func (idxRec *IndexRecCache) getIndexRecommendation(key indexRecKey) (indexRecIn
 	return recInfo, found
 }
 
-func (idxRec *IndexRecCache) getOrCreateIndexRecommendation(key indexRecKey) (indexRecInfo, bool) {
+// GetOrCreateIndexRecommendation gets the value from cache or creates one if it doesn't exists.
+func (idxRec *IndexRecCache) GetOrCreateIndexRecommendation(key IndexRecKey) (IndexRecInfo, bool) {
 	recInfo, found := idxRec.getIndexRecommendation(key)
 	if found {
 		return recInfo, true
@@ -172,7 +156,7 @@ func (idxRec *IndexRecCache) getOrCreateIndexRecommendation(key indexRecKey) (in
 		// Abort if no entries were deleted.
 		if deleted == 0 {
 			atomic.AddInt64(&idxRec.atomic.uniqueIndexRecInfo, -int64(1))
-			return indexRecInfo{}, false
+			return IndexRecInfo{}, false
 		}
 	}
 
@@ -180,10 +164,9 @@ func (idxRec *IndexRecCache) getOrCreateIndexRecommendation(key indexRecKey) (in
 	defer idxRec.mu.Unlock()
 	// For a new entry, we want the lastGeneratedTs to be in the past, in case we reach
 	// the execution count, we should generate new recommendations.
-	recInfo = indexRecInfo{
-		lastGeneratedTs: timeutil.Now().Add(-time.Hour),
-		recommendations: []string{},
-		executionCount:  0,
+	recInfo = IndexRecInfo{
+		LastGeneratedTs: timeutil.Now().Add(-time.Hour),
+		Recommendations: []string{},
 	}
 	idxRec.mu.idxRecommendations[key] = recInfo
 
@@ -191,18 +174,17 @@ func (idxRec *IndexRecCache) getOrCreateIndexRecommendation(key indexRecKey) (in
 }
 
 func (idxRec *IndexRecCache) setIndexRecommendations(
-	key indexRecKey, time time.Time, recommendations []string, execCount int64,
+	key IndexRecKey, time time.Time, recommendations []string,
 ) {
-	_, found := idxRec.getOrCreateIndexRecommendation(key)
+	_, found := idxRec.GetOrCreateIndexRecommendation(key)
 
 	if found {
 		idxRec.mu.Lock()
 		defer idxRec.mu.Unlock()
 
-		idxRec.mu.idxRecommendations[key] = indexRecInfo{
-			lastGeneratedTs: time,
-			recommendations: recommendations,
-			executionCount:  execCount,
+		idxRec.mu.idxRecommendations[key] = IndexRecInfo{
+			LastGeneratedTs: time,
+			Recommendations: recommendations,
 		}
 	}
 }
@@ -215,7 +197,7 @@ func (idxRec *IndexRecCache) clearOldIdxRecommendations() int {
 
 	deleted := 0
 	for key, value := range idxRec.mu.idxRecommendations {
-		if timeutil.Since(value.lastGeneratedTs).Hours() >= 24 {
+		if timeutil.Since(value.LastGeneratedTs).Hours() >= 24 {
 			delete(idxRec.mu.idxRecommendations, key)
 			deleted++
 		}

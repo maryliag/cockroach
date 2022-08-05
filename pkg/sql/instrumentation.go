@@ -699,18 +699,22 @@ func (ih *instrumentationHelper) SetIndexRecommendations(
 					planner.SessionData().Database,
 					stmtType,
 					ih.indexRecommendations,
-					true,
 				)
 			}
 		}
 	} else {
-		ih.indexRecommendations = idxRec.UpdateIndexRecommendations(
-			ih.fingerprint,
-			ih.planGist.Hash(),
-			planner.SessionData().Database,
-			stmtType,
-			[]string{},
-			false,
-		)
+		idxKey := idxrecommendations.IndexRecKey{
+			StmtNoConstants: ih.fingerprint,
+			Database:        planner.SessionData().Database,
+			PlanHash:        ih.planGist.Hash(),
+		}
+
+		recInfo, found := idxRec.GetOrCreateIndexRecommendation(idxKey)
+		if found {
+			ih.indexRecommendations = recInfo.Recommendations
+		} else {
+			ih.indexRecommendations = []string{}
+		}
+
 	}
 }
