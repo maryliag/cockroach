@@ -676,12 +676,7 @@ func (ih *instrumentationHelper) SetIndexRecommendations(
 	opc.reset(ctx)
 	stmtType := opc.p.stmt.AST.StatementType()
 
-	if idxRec.ShouldGenerateIndexRecommendation(
-		ih.fingerprint,
-		ih.planGist.Hash(),
-		planner.SessionData().Database,
-		stmtType,
-	) {
+	if idxRec.ShouldGenerateIndexRecommendation(stmtType) {
 		f := opc.optimizer.Factory()
 		f.FoldingControl().AllowStableFolds()
 		bld := optbuilder.New(ctx, &opc.p.semaCtx, opc.p.EvalContext(), &opc.catalog, f, opc.p.stmt.AST)
@@ -692,25 +687,7 @@ func (ih *instrumentationHelper) SetIndexRecommendations(
 			err = opc.makeQueryIndexRecommendation(ctx)
 			if err != nil {
 				log.Warningf(ctx, "unable to generate index recommendations: %s", err)
-			} else {
-				idxRec.UpdateIndexRecommendations(
-					ih.fingerprint,
-					ih.planGist.Hash(),
-					planner.SessionData().Database,
-					stmtType,
-					ih.indexRecommendations,
-					true,
-				)
 			}
 		}
-	} else {
-		ih.indexRecommendations = idxRec.UpdateIndexRecommendations(
-			ih.fingerprint,
-			ih.planGist.Hash(),
-			planner.SessionData().Database,
-			stmtType,
-			[]string{},
-			false,
-		)
 	}
 }
