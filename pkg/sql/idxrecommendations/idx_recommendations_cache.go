@@ -168,12 +168,7 @@ func (idxRec *IndexRecCache) getOrCreateIndexRecommendation(key indexRecKey) (in
 
 	if incrementedCount > limit {
 		// If we have exceeded limit of unique index recommendations try to delete older data.
-		deleted := idxRec.clearOldIdxRecommendations()
-		// Abort if no entries were deleted.
-		if deleted == 0 {
-			atomic.AddInt64(&idxRec.atomic.uniqueIndexRecInfo, -int64(1))
-			return indexRecInfo{}, false
-		}
+		idxRec.clearOldIdxRecommendations()
 	}
 
 	idxRec.mu.Lock()
@@ -209,17 +204,17 @@ func (idxRec *IndexRecCache) setIndexRecommendations(
 
 // clearOldIdxRecommendations clear entries that was last updated
 // more than a day ago. Returns the total deleted entries.
-func (idxRec *IndexRecCache) clearOldIdxRecommendations() int {
+func (idxRec *IndexRecCache) clearOldIdxRecommendations() {
 	idxRec.mu.Lock()
 	defer idxRec.mu.Unlock()
 
 	deleted := 0
-	for key, value := range idxRec.mu.idxRecommendations {
-		if timeutil.Since(value.lastGeneratedTs).Hours() >= 24 {
-			delete(idxRec.mu.idxRecommendations, key)
-			deleted++
+	for key := range idxRec.mu.idxRecommendations {
+		if deleted > 1000 {
+			break
 		}
+		delete(idxRec.mu.idxRecommendations, key)
+		deleted++
 	}
 	atomic.AddInt64(&idxRec.atomic.uniqueIndexRecInfo, int64(-deleted))
-	return deleted
 }
