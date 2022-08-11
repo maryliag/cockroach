@@ -439,6 +439,42 @@ var regularBuiltins = map[string]builtinDefinition{
 		},
 	),
 
+	"combine_unique_strings": makeBuiltin(arrayProps(),
+		tree.Overload{
+			Types:      tree.ArgTypes{{"input", types.StringArray}},
+			ReturnType: tree.FixedReturnType(types.StringArray),
+			Fn: func(ctx *eval.Context, args tree.Datums) (tree.Datum, error) {
+				result := tree.NewDArray(types.String)
+				found := false
+				for _, e := range tree.MustBeDArray(args[0]).Array {
+					arrString := tree.MustBeDString(e)
+					arr, _, err := tree.ParseDArrayFromString(ctx, string(arrString), types.String)
+					if err != nil {
+						return nil, err
+					}
+
+					for _, elem := range arr.Array {
+						found = false
+						for _, value := range result.Array {
+							if value.String() == elem.String() {
+								found = true
+								continue
+							}
+						}
+						if !found {
+							if err := result.Append(elem); err != nil {
+								return nil, err
+							}
+						}
+					}
+				}
+				return result, nil
+			},
+			Info:       "Combine string arrays into a single array with unique elements",
+			Volatility: volatility.Immutable,
+		},
+	),
+
 	// https://www.postgresql.org/docs/10/static/functions-string.html#FUNCTIONS-STRING-OTHER
 	"convert_from": makeBuiltin(tree.FunctionProperties{Category: builtinconstants.CategoryString},
 		tree.Overload{

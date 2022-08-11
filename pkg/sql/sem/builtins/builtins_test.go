@@ -655,3 +655,31 @@ func TestTruncateTimestamp(t *testing.T) {
 		})
 	}
 }
+
+func TestCombineUniqueString(t *testing.T) {
+	defer leaktest.AfterTest(t)()
+	ctx := context.Background()
+	params := base.TestServerArgs{}
+	s, db, _ := serverutils.StartServer(t, params)
+	defer s.Stopper().Stop(ctx)
+
+	tdb := sqlutils.MakeSQLRunner(db)
+	tdb.Exec(t, `
+CREATE DATABASE t;
+USE t;
+CREATE TABLE TEST (id INT, count INT, recs STRING[]);
+INSERT INTO TEST VALUES(1, 2, ARRAY[]);
+INSERT INTO TEST VALUES(1, 3, ARRAY['a', 'b']);
+INSERT INTO TEST VALUES(1, 4, ARRAY['c', 'b']);
+`)
+
+	var key int64
+	var count int64
+	var recs string
+	tdb.QueryRow(t, "SELECT id, sum(count), combine_unique_strings(array_agg(recs::STRING))::STRING "+
+		"FROM TEST GROUP BY id").Scan(&key, &count, &recs)
+
+	require.Equal(t, int64(1), key)
+	require.Equal(t, int64(9), count)
+	require.Equal(t, "{a,b,c}", recs)
+}
