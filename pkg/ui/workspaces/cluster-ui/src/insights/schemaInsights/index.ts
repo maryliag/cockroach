@@ -10,3 +10,4 @@
 
 export * from "./indexUsageStatsRec";
 export * from "./schemaInsightsView";
+export * from "./emptySchemaInsightsTablePlaceholder";

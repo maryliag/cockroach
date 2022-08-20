@@ -14,6 +14,7 @@ import {
   InsightType,
 } from "../insightsTable/insightsTable";
 import { recommendDropUnusedIndex } from "../insights";
+import { HexStringToInt64String } from "../util";
 
 export type ClusterIndexUsageStatistic = {
   table_id: number;
@@ -32,7 +33,7 @@ type CreateIndexRecommendationsResponse = {
   query: string;
   querysummary: string;
   implicittxn: boolean;
-  index_recommendations: string;
+  index_recommendations: string[];
 };
 
 type SchemaInsightResponse =
@@ -77,19 +78,18 @@ function createIndexRecommendationsToState(
   const results: InsightRecommendation[] = [];
 
   txn_result.rows.forEach(row => {
-    results.push({
-      type: "CREATE_INDEX",
-      database: row.db,
-      execution: {
-        statement: row.query,
-        summary: row.querysummary,
-        fingerprintID: row.fingerprint_id,
-        implicit: row.implicittxn,
-      },
-      query:
-        row.index_recommendations?.length > 0
-          ? row.index_recommendations[0].split(" : ")[1]
-          : "",
+    row.index_recommendations.forEach(rec => {
+      results.push({
+        type: "CREATE_INDEX",
+        database: row.db,
+        execution: {
+          statement: row.query,
+          summary: row.querysummary,
+          fingerprintID: HexStringToInt64String(row.fingerprint_id),
+          implicit: row.implicittxn,
+        },
+        query: rec.split(" : ")[1],
+      });
     });
   });
   return results;
@@ -116,8 +116,8 @@ const dropUnusedIndexQuery: SchemaInsightQuery<ClusterIndexUsageStatistic> = {
 const createIndexRecommendationsQuery: SchemaInsightQuery<CreateIndexRecommendationsResponse> =
   {
     name: "CREATE_INDEX",
-    query: `SELECT 
-       fingerprint_id,  
+    query: `SELECT
+       encode(fingerprint_id, 'hex') AS fingerprint_id,  
        metadata ->> 'db' AS db, 
        metadata ->> 'query' AS query, 
        metadata ->> 'querySummary' as querySummary, 

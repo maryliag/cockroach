@@ -37,6 +37,7 @@ import { filterSchemaInsights } from "../utils";
 import { Search } from "../../search";
 import { InsightsError } from "../insightsErrorComponent";
 import { Pagination } from "../../pagination";
+import { EmptySchemaInsightsTablePlaceholder } from "./emptySchemaInsightsTablePlaceholder";
 const cx = classNames.bind(styles);
 const sortableTableCx = classNames.bind(sortableTableStyles);
 
@@ -227,6 +228,13 @@ export const SchemaInsightsView: React.FC<SchemaInsightsViewProps> = ({
                 data={filteredSchemaInsights}
                 sortSetting={sortSetting}
                 onChangeSortSetting={onChangeSortSetting}
+                renderNoResult={
+                  <EmptySchemaInsightsTablePlaceholder
+                    isEmptySearchResults={
+                      search?.length > 0 && filteredSchemaInsights?.length == 0
+                    }
+                  />
+                }
               />
             </section>
             <Pagination
