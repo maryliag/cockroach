@@ -9,28 +9,28 @@
 // licenses/APL.txt.
 
 import { createSelector } from "reselect";
-import { adminUISelector } from "src/store/utils/selectors";
-
-const selectTransactionInsightDetailsState = createSelector(
-  adminUISelector,
-  adminUiState => {
-    if (!adminUiState.transactionInsightDetails) return null;
-    return adminUiState.transactionInsightDetails;
-  },
-);
-
-export const selectTransactionInsightDetails = createSelector(
-  selectTransactionInsightDetailsState,
-  txnInsightDetailsState => {
-    if (!txnInsightDetailsState) return null;
-    return txnInsightDetailsState.data;
-  },
-);
-
-export const selectTransactionInsightDetailsError = createSelector(
-  selectTransactionInsightDetailsState,
-  txnInsightDetailsState => {
-    if (!txnInsightDetailsState) return null;
-    return txnInsightDetailsState.lastError;
-  },
-);
+// import { adminUISelector } from "src/store/utils/selectors";
+//
+// const selectTransactionInsightDetailsState = createSelector(
+//   adminUISelector,
+//   adminUiState => {
+//     if (!adminUiState.transactionInsightDetails) return null;
+//     return adminUiState.transactionInsightDetails;
+//   },
+// );
+//
+// export const selectTransactionInsightDetails = createSelector(
+//   selectTransactionInsightDetailsState,
+//   txnInsightDetailsState => {
+//     if (!txnInsightDetailsState) return null;
+//     return txnInsightDetailsState.data;
+//   },
+// );
+//
+// export const selectTransactionInsightDetailsError = createSelector(
+//   selectTransactionInsightDetailsState,
+//   txnInsightDetailsState => {
+//     if (!txnInsightDetailsState) return null;
+//     return txnInsightDetailsState.lastError;
+//   },
+// );

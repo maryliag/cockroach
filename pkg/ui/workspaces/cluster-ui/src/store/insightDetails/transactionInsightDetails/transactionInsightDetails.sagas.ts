@@ -9,42 +9,42 @@
 // licenses/APL.txt.
 
 import { all, call, delay, put, takeLatest } from "redux-saga/effects";
-
-import { actions } from "./transactionInsightDetails.reducer";
-import {
-  getTransactionInsightEventDetailsState,
-  TransactionInsightEventDetailsRequest,
-} from "src/api/insightsApi";
-import { PayloadAction } from "@reduxjs/toolkit";
-
-export function* refreshTransactionInsightDetailsSaga(
-  action: PayloadAction<TransactionInsightEventDetailsRequest>,
-) {
-  yield put(actions.request(action.payload));
-}
-
-export function* requestTransactionInsightDetailsSaga(
-  action: PayloadAction<TransactionInsightEventDetailsRequest>,
-): any {
-  try {
-    const result = yield call(
-      getTransactionInsightEventDetailsState,
-      action.payload,
-    );
-    yield put(actions.received(result));
-  } catch (e) {
-    yield put(actions.failed(e));
-  }
-}
-
-export function* receivedTransactionInsightDetailsSaga() {
-  yield put(actions.invalidated());
-}
-
-export function* transactionInsightDetailsSaga() {
-  yield all([
-    takeLatest(actions.refresh, refreshTransactionInsightDetailsSaga),
-    takeLatest(actions.request, requestTransactionInsightDetailsSaga),
-    takeLatest(actions.received, receivedTransactionInsightDetailsSaga),
-  ]);
-}
+//
+// import { actions } from "./transactionInsightDetails.reducer";
+// import {
+//   getTransactionInsightEventDetailsState,
+//   TransactionInsightEventDetailsRequest,
+// } from "src/api/insightsApi";
+// import { PayloadAction } from "@reduxjs/toolkit";
+//
+// export function* refreshTransactionInsightDetailsSaga(
+//   action: PayloadAction<TransactionInsightEventDetailsRequest>,
+// ) {
+//   yield put(actions.request(action.payload));
+// }
+//
+// export function* requestTransactionInsightDetailsSaga(
+//   action: PayloadAction<TransactionInsightEventDetailsRequest>,
+// ): any {
+//   try {
+//     const result = yield call(
+//       getTransactionInsightEventDetailsState,
+//       action.payload,
+//     );
+//     yield put(actions.received(result));
+//   } catch (e) {
+//     yield put(actions.failed(e));
+//   }
+// }
+//
+// export function* receivedTransactionInsightDetailsSaga() {
+//   yield put(actions.invalidated());
+// }
+//
+// export function* transactionInsightDetailsSaga() {
+//   yield all([
+//     takeLatest(actions.refresh, refreshTransactionInsightDetailsSaga),
+//     takeLatest(actions.request, requestTransactionInsightDetailsSaga),
+//     takeLatest(actions.received, receivedTransactionInsightDetailsSaga),
+//   ]);
+// }

@@ -27,27 +27,27 @@ const initialState: StatementInsightsState = {
   valid: true,
 };
 
-const statementInsightsSlice = createSlice({
-  name: `${DOMAIN_NAME}/statementInsightsSlice`,
-  initialState,
-  reducers: {
-    received: (state, action: PayloadAction<StatementInsights>) => {
-      state.data = action.payload;
-      state.valid = true;
-      state.lastError = null;
-      state.lastUpdated = moment.utc();
-    },
-    failed: (state, action: PayloadAction<Error>) => {
-      state.valid = false;
-      state.lastError = action.payload;
-    },
-    invalidated: state => {
-      state.valid = false;
-    },
-    // Define actions that don't change state.
-    refresh: noopReducer,
-    request: noopReducer,
-  },
-});
-
-export const { reducer, actions } = statementInsightsSlice;
+// const statementInsightsSlice = createSlice({
+//   name: `${DOMAIN_NAME}/statementInsightsSlice`,
+//   initialState,
+//   reducers: {
+//     received: (state, action: PayloadAction<StatementInsights>) => {
+//       state.data = action.payload;
+//       state.valid = true;
+//       state.lastError = null;
+//       state.lastUpdated = moment.utc();
+//     },
+//     failed: (state, action: PayloadAction<Error>) => {
+//       state.valid = false;
+//       state.lastError = action.payload;
+//     },
+//     invalidated: state => {
+//       state.valid = false;
+//     },
+//     // Define actions that don't change state.
+//     refresh: noopReducer,
+//     request: noopReducer,
+//   },
+// });
+//
+// export const { reducer, actions } = statementInsightsSlice;

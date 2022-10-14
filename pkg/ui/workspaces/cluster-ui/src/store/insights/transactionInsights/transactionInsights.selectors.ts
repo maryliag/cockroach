@@ -14,29 +14,29 @@ import {
   localStorageSelector,
 } from "src/store/utils/selectors";
 
-const selectTransactionInsightsState = createSelector(
-  adminUISelector,
-  adminUiState => {
-    if (!adminUiState.transactionInsights) return null;
-    return adminUiState.transactionInsights;
-  },
-);
-
-export const selectTransactionInsights = createSelector(
-  selectTransactionInsightsState,
-  txnInsightsState => {
-    if (!txnInsightsState) return [];
-    return txnInsightsState.data;
-  },
-);
-
-export const selectTransactionInsightsError = createSelector(
-  selectTransactionInsightsState,
-  txnInsightsState => {
-    if (!txnInsightsState) return null;
-    return txnInsightsState.lastError;
-  },
-);
+// const selectTransactionInsightsState = createSelector(
+//   adminUISelector,
+//   adminUiState => {
+//     if (!adminUiState.transactionInsights) return null;
+//     return adminUiState.transactionInsights;
+//   },
+// );
+//
+// export const selectTransactionInsights = createSelector(
+//   selectTransactionInsightsState,
+//   txnInsightsState => {
+//     if (!txnInsightsState) return [];
+//     return txnInsightsState.data;
+//   },
+// );
+//
+// export const selectTransactionInsightsError = createSelector(
+//   selectTransactionInsightsState,
+//   txnInsightsState => {
+//     if (!txnInsightsState) return null;
+//     return txnInsightsState.lastError;
+//   },
+// );
 
 export const selectSortSetting = createSelector(
   localStorageSelector,

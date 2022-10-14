@@ -11,4 +11,4 @@
 export * from "./transactionInsights";
 export * from "./statementInsights";
 export * from "./workloadInsightRootControl";
-export * from "./workloadInsightsPageConnected";
+// export * from "./workloadInsightsPageConnected";

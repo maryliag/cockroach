@@ -18,42 +18,42 @@ import { RouteComponentProps } from "react-router";
 import { StatementInsightEvent } from "../../../insights";
 import { AppState } from "../../reducers";
 
-const selectStatementInsightsState = createSelector(
-  adminUISelector,
-  adminUiState => {
-    if (!adminUiState.statementInsights) return null;
-    return adminUiState.statementInsights;
-  },
-);
-
-export const selectStatementInsights = createSelector(
-  selectStatementInsightsState,
-  stmtInsightsState => {
-    if (!stmtInsightsState) return [];
-    return stmtInsightsState.data;
-  },
-);
-
-export const selectStatementInsightsError = createSelector(
-  selectStatementInsightsState,
-  stmtInsightsState => {
-    if (!stmtInsightsState) return null;
-    return stmtInsightsState.lastError;
-  },
-);
-
-export const selectStatementInsightDetails = createSelector(
-  selectStatementInsightsState,
-  (_state: AppState, props: RouteComponentProps) => props,
-  (statementInsights, props): StatementInsightEvent => {
-    if (!statementInsights) return null;
-
-    const insightId = getMatchParamByName(props.match, "id");
-    return statementInsights.data?.find(
-      statementInsight => statementInsight.statementID === insightId,
-    );
-  },
-);
+// const selectStatementInsightsState = createSelector(
+//   adminUISelector,
+//   adminUiState => {
+//     if (!adminUiState.statementInsights) return null;
+//     return adminUiState.statementInsights;
+//   },
+// );
+//
+// export const selectStatementInsights = createSelector(
+//   selectStatementInsightsState,
+//   stmtInsightsState => {
+//     if (!stmtInsightsState) return [];
+//     return stmtInsightsState.data;
+//   },
+// );
+//
+// export const selectStatementInsightsError = createSelector(
+//   selectStatementInsightsState,
+//   stmtInsightsState => {
+//     if (!stmtInsightsState) return null;
+//     return stmtInsightsState.lastError;
+//   },
+// );
+//
+// export const selectStatementInsightDetails = createSelector(
+//   selectStatementInsightsState,
+//   (_state: AppState, props: RouteComponentProps) => props,
+//   (statementInsights, props): StatementInsightEvent => {
+//     if (!statementInsights) return null;
+//
+//     const insightId = getMatchParamByName(props.match, "id");
+//     return statementInsights.data?.find(
+//       statementInsight => statementInsight.statementID === insightId,
+//     );
+//   },
+// );
 
 export const selectColumns = createSelector(
   localStorageSelector,

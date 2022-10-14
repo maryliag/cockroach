@@ -8,31 +8,31 @@
 // by the Apache License, Version 2.0, included in the file
 // licenses/APL.txt.
 import { connect } from "react-redux";
-import { RouteComponentProps, withRouter } from "react-router-dom";
-import {
-  StatementInsightDetails,
-  StatementInsightDetailsStateProps,
-} from "./statementInsightDetails";
-import { AppState } from "src/store";
-import {
-  selectStatementInsightDetails,
-  selectStatementInsightsError,
-} from "src/store/insights/statementInsights";
-
-const mapStateToProps = (
-  state: AppState,
-  props: RouteComponentProps,
-): StatementInsightDetailsStateProps => {
-  const insightStatements = selectStatementInsightDetails(state, props);
-  const insightError = selectStatementInsightsError(state);
-  return {
-    insightEventDetails: insightStatements,
-    insightError: insightError,
-  };
-};
-
-export const StatementInsightDetailsConnected = withRouter(
-  connect<StatementInsightDetailsStateProps, RouteComponentProps>(
-    mapStateToProps,
-  )(StatementInsightDetails),
-);
+// import { RouteComponentProps, withRouter } from "react-router-dom";
+// import {
+//   StatementInsightDetails,
+//   StatementInsightDetailsStateProps,
+// } from "./statementInsightDetails";
+// import { AppState } from "src/store";
+// import {
+//   selectStatementInsightDetails,
+//   selectStatementInsightsError,
+// } from "src/store/insights/statementInsights";
+//
+// const mapStateToProps = (
+//   state: AppState,
+//   props: RouteComponentProps,
+// ): StatementInsightDetailsStateProps => {
+//   const insightStatements = selectStatementInsightDetails(state, props);
+//   const insightError = selectStatementInsightsError(state);
+//   return {
+//     insightEventDetails: insightStatements,
+//     insightError: insightError,
+//   };
+// };
+//
+// export const StatementInsightDetailsConnected = withRouter(
+//   connect<StatementInsightDetailsStateProps, RouteComponentProps>(
+//     mapStateToProps,
+//   )(StatementInsightDetails),
+// );
