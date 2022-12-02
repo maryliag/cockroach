@@ -306,8 +306,8 @@ export const getInsightFromCause = (
 };
 
 export const InsightExecOptions = new Map<string, string>([
-  [InsightExecEnum.TRANSACTION.toString(), "Transaction Executions"],
   [InsightExecEnum.STATEMENT.toString(), "Statement Executions"],
+  [InsightExecEnum.TRANSACTION.toString(), "Transaction Executions"],
 ]);
 
 export type WorkloadInsightEventFilters = Pick<Filters, "app">;
