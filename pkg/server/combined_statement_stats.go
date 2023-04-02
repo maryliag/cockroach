@@ -162,10 +162,10 @@ SELECT
 COALESCE(
   sum(
     (statistics -> 'statistics' -> 'svcLat' ->> 'mean')::FLOAT *
-    (statistics-> 'statistics' ->> 'cnt')::FLOAT
+    (statistics -> 'statistics' ->> 'cnt')::FLOAT
   )
 , 0)
-FROM crdb_internal.%s_statistics%s%s
+FROM crdb_internal.%s_statistics%s%s 
 %s
 `
 
@@ -177,10 +177,6 @@ FROM crdb_internal.%s_statistics%s%s
 			sessiondata.NodeUserSessionDataOverride,
 			fmt.Sprintf(queryWithPlaceholders, table, `_persisted`, tableSuffix, whereClause),
 			args...)
-
-		defer func() {
-			err = closeIterator(it, err)
-		}()
 
 		if err != nil {
 			return 0, err
@@ -201,7 +197,7 @@ FROM crdb_internal.%s_statistics%s%s
 		// If the total runtime is 0 there were no results from the persisted table,
 		// so we retrieve the data from the combined view with data in-memory.
 		if tree.MustBeDFloat(row[0]) == 0 {
-			err := closeIterator(it, err)
+			err = closeIterator(it, err)
 			if err != nil {
 				return 0, err
 			}
@@ -228,6 +224,41 @@ FROM crdb_internal.%s_statistics%s%s
 				return 0, errors.New("unexpected null row on getTotalRuntimeSecs")
 			}
 		}
+
+		// If the total runtime is 0 there were no results from the persisted table,
+		// so we retrieve the data from the combined view with data in-memory.
+		if tree.MustBeDFloat(row[0]) == 0 {
+			err = closeIterator(it, err)
+			if err != nil {
+				return 0, err
+			}
+			it, err = ie.QueryIteratorEx(
+				ctx,
+				fmt.Sprintf(`%s-total-runtime-with-memory`, table),
+				nil,
+				sessiondata.NodeUserSessionDataOverride,
+				fmt.Sprintf(queryWithPlaceholders, table, ``, ``, whereClause),
+				args...)
+
+			if err != nil {
+				return 0, err
+			}
+			ok, err = it.Next(ctx)
+			if err != nil {
+				return 0, err
+			}
+			if !ok {
+				return 0, errors.New("expected one row but got none")
+			}
+
+			if row = it.Cur(); row == nil {
+				return 0, errors.New("unexpected null row")
+			}
+		}
+
+		defer func() {
+			err = closeIterator(it, err)
+		}()
 
 		return float32(tree.MustBeDFloat(row[0])), nil
 
@@ -431,13 +462,13 @@ GROUP BY
 	it, err := ie.QueryIteratorEx(ctx, "combined-stmts-by-interval", nil,
 		sessiondata.NodeUserSessionDataOverride, query, args...)
 
-	defer func() {
-		err = closeIterator(it, err)
-	}()
-
 	if err != nil {
 		return nil, serverError(ctx, err)
 	}
+
+	defer func() {
+		err = closeIterator(it, err)
+	}()
 
 	// If there are no results from the persisted table, retrieve the data from the combined view
 	// with data in-memory.
@@ -556,13 +587,13 @@ GROUP BY
 	it, err := ie.QueryIteratorEx(ctx, "combined-txns-by-interval", nil,
 		sessiondata.NodeUserSessionDataOverride, query, args...)
 
-	defer func() {
-		err = closeIterator(it, err)
-	}()
-
 	if err != nil {
 		return nil, serverError(ctx, err)
 	}
+
+	defer func() {
+		err = closeIterator(it, err)
+	}()
 
 	// If there are no results from the persisted table, retrieve the data from the combined view
 	// with data in-memory.
@@ -886,13 +917,13 @@ func getStatementDetailsPerAggregatedTs(
 	it, err := ie.QueryIteratorEx(ctx, "combined-stmts-details-by-aggregated-timestamp", nil,
 		sessiondata.NodeUserSessionDataOverride, query, args...)
 
-	defer func() {
-		err = closeIterator(it, err)
-	}()
-
 	if err != nil {
 		return nil, serverError(ctx, err)
 	}
+
+	defer func() {
+		err = closeIterator(it, err)
+	}()
 
 	// If there are no results from the persisted table, retrieve the data from the combined view
 	// with data in-memory.
@@ -958,13 +989,13 @@ func getExplainPlanFromGist(ctx context.Context, ie *sql.InternalExecutor, planG
 	it, err := ie.QueryIteratorEx(ctx, "combined-stmts-details-get-explain-plan", nil,
 		sessiondata.NodeUserSessionDataOverride, query, args...)
 
-	defer func() {
-		err = closeIterator(it, err)
-	}()
-
 	if err != nil {
 		return planError
 	}
+
+	defer func() {
+		err = closeIterator(it, err)
+	}()
 
 	var explainPlan []string
 	var ok bool
@@ -1047,13 +1078,13 @@ func getStatementDetailsPerPlanHash(
 	it, err := ie.QueryIteratorEx(ctx, "combined-stmts-details-by-plan-hash", nil,
 		sessiondata.NodeUserSessionDataOverride, query, args...)
 
-	defer func() {
-		err = closeIterator(it, err)
-	}()
-
 	if err != nil {
 		return nil, serverError(ctx, err)
 	}
+
+	defer func() {
+		err = closeIterator(it, err)
+	}()
 
 	// If there are no results from the persisted table, retrieve the data from the combined view
 	// with data in-memory.
