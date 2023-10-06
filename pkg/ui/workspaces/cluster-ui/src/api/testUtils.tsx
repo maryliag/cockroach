@@ -11,10 +11,9 @@
 import { cockroach, google } from "@cockroachlabs/crdb-protobuf-client";
 import Long from "long";
 
-export type Stmt =
-  cockroach.server.serverpb.StatementsResponse.ICollectedStatementStatistics;
+export type Stmt = cockroach.server.serverpb.ICollectedStatementStatistics;
 export type Txn =
-  cockroach.server.serverpb.StatementsResponse.IExtendedCollectedTransactionStatistics;
+  cockroach.server.serverpb.IExtendedCollectedTransactionStatistics;
 type ILatencyInfo = cockroach.sql.ILatencyInfo;
 
 const latencyInfo: Required<ILatencyInfo> = {

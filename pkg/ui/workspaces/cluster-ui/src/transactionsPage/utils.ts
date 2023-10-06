@@ -25,10 +25,9 @@ import {
   unset,
 } from "../util";
 
-type Statement =
-  protos.cockroach.server.serverpb.StatementsResponse.ICollectedStatementStatistics;
+type Statement = protos.cockroach.server.serverpb.ICollectedStatementStatistics;
 type Transaction =
-  protos.cockroach.server.serverpb.StatementsResponse.IExtendedCollectedTransactionStatistics;
+  protos.cockroach.server.serverpb.IExtendedCollectedTransactionStatistics;
 
 export const getTrxAppFilterOptions = (
   transactions: Transaction[],

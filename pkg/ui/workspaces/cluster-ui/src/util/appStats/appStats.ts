@@ -18,7 +18,7 @@ import Long from "long";
 export type StatementStatistics = cockroach.sql.IStatementStatistics;
 export type ExecStats = cockroach.sql.IExecStats;
 export type CollectedStatementStatistics =
-  cockroach.server.serverpb.StatementsResponse.ICollectedStatementStatistics;
+  cockroach.server.serverpb.ICollectedStatementStatistics;
 
 export interface NumericStat {
   mean?: number;

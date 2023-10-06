@@ -50,7 +50,7 @@ import {
 import { BarChartOptions } from "src/barCharts/barChartFactory";
 
 type ICollectedStatementStatistics =
-  cockroach.server.serverpb.StatementsResponse.ICollectedStatementStatistics;
+  cockroach.server.serverpb.ICollectedStatementStatistics;
 import styles from "./statementsTable.module.scss";
 import { StatementDiagnosticsReport } from "../api";
 import { Timestamp } from "../timestamp";

@@ -46,7 +46,7 @@ func (s *statusServer) Statements(
 	}
 
 	response := &serverpb.StatementsResponse{
-		Statements:            []serverpb.StatementsResponse_CollectedStatementStatistics{},
+		Statements:            []serverpb.CollectedStatementStatistics{},
 		LastReset:             timeutil.Now(),
 		InternalAppNamePrefix: catconstants.InternalAppNamePrefix,
 	}
@@ -133,22 +133,22 @@ func statementsLocal(
 	lastReset := sqlServer.pgServer.SQLServer.GetStmtStatsLastReset()
 
 	resp := &serverpb.StatementsResponse{
-		Statements:            make([]serverpb.StatementsResponse_CollectedStatementStatistics, len(stmtStats)),
+		Statements:            make([]serverpb.CollectedStatementStatistics, len(stmtStats)),
 		LastReset:             lastReset,
 		InternalAppNamePrefix: catconstants.InternalAppNamePrefix,
-		Transactions:          make([]serverpb.StatementsResponse_ExtendedCollectedTransactionStatistics, len(txnStats)),
+		Transactions:          make([]serverpb.ExtendedCollectedTransactionStatistics, len(txnStats)),
 	}
 
 	for i, txn := range txnStats {
-		resp.Transactions[i] = serverpb.StatementsResponse_ExtendedCollectedTransactionStatistics{
+		resp.Transactions[i] = serverpb.ExtendedCollectedTransactionStatistics{
 			StatsData: txn,
 			NodeID:    nodeID,
 		}
 	}
 
 	for i, stmt := range stmtStats {
-		resp.Statements[i] = serverpb.StatementsResponse_CollectedStatementStatistics{
-			Key: serverpb.StatementsResponse_ExtendedStatementStatisticsKey{
+		resp.Statements[i] = serverpb.CollectedStatementStatistics{
+			Key: serverpb.ExtendedStatementStatisticsKey{
 				KeyData: stmt.Key,
 				NodeID:  nodeID,
 			},

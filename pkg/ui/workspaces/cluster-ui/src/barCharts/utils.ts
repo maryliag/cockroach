@@ -13,9 +13,9 @@ import * as protos from "@cockroachlabs/crdb-protobuf-client";
 import { TransactionInfo } from "../transactionsTable";
 
 type StatementStatistics =
-  protos.cockroach.server.serverpb.StatementsResponse.ICollectedStatementStatistics;
+  protos.cockroach.server.serverpb.ICollectedStatementStatistics;
 type Transaction =
-  protos.cockroach.server.serverpb.StatementsResponse.IExtendedCollectedTransactionStatistics;
+  protos.cockroach.server.serverpb.IExtendedCollectedTransactionStatistics;
 
 export const clamp = (i: number) => (i < 0 ? 0 : i);
 

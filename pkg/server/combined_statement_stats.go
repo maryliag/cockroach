@@ -114,8 +114,8 @@ func getCombinedStatementStats(
 		}
 	}
 
-	var statements []serverpb.StatementsResponse_CollectedStatementStatistics
-	var transactions []serverpb.StatementsResponse_ExtendedCollectedTransactionStatistics
+	var statements []serverpb.CollectedStatementStatistics
+	var transactions []serverpb.ExtendedCollectedTransactionStatistics
 
 	if req.FetchMode == nil || req.FetchMode.StatsType == serverpb.CombinedStatementsStatsRequest_TxnStatsOnly {
 		transactions, err = collectCombinedTransactions(
@@ -561,7 +561,7 @@ func getTxnColumnFromSortOption(sort serverpb.StatsSortOptions) string {
 // contain no duplicate transaction fingerprint ids.
 func buildWhereClauseForStmtsByTxn(
 	req *serverpb.CombinedStatementsStatsRequest,
-	transactions []serverpb.StatementsResponse_ExtendedCollectedTransactionStatistics,
+	transactions []serverpb.ExtendedCollectedTransactionStatistics,
 	testingKnobs *sqlstats.TestingKnobs,
 ) (whereClause string, args []interface{}) {
 	var buffer strings.Builder
@@ -663,7 +663,7 @@ func collectCombinedStatements(
 	testingKnobs *sqlstats.TestingKnobs,
 	activityTableHasAllData bool,
 	tableSuffix string,
-) ([]serverpb.StatementsResponse_CollectedStatementStatistics, error) {
+) ([]serverpb.CollectedStatementStatistics, error) {
 	aostClause := testingKnobs.GetAOSTClause()
 	const expectedNumDatums = 11
 	const queryFormat = `
@@ -778,7 +778,7 @@ FROM (SELECT fingerprint_id,
 		}
 	}
 
-	var statements []serverpb.StatementsResponse_CollectedStatementStatistics
+	var statements []serverpb.CollectedStatementStatistics
 	var ok bool
 	for ok, err = it.Next(ctx); ok; ok, err = it.Next(ctx) {
 		var row tree.Datums
@@ -833,8 +833,8 @@ FROM (SELECT fingerprint_id,
 			return nil, srverrors.ServerError(ctx, err)
 		}
 
-		stmt := serverpb.StatementsResponse_CollectedStatementStatistics{
-			Key: serverpb.StatementsResponse_ExtendedStatementStatisticsKey{
+		stmt := serverpb.CollectedStatementStatistics{
+			Key: serverpb.ExtendedStatementStatisticsKey{
 				KeyData:      metadata.Key,
 				AggregatedTs: aggregatedTs,
 			},
@@ -891,7 +891,7 @@ func collectCombinedTransactions(
 	testingKnobs *sqlstats.TestingKnobs,
 	activityTableHasAllData bool,
 	tableSuffix string,
-) ([]serverpb.StatementsResponse_ExtendedCollectedTransactionStatistics, error) {
+) ([]serverpb.ExtendedCollectedTransactionStatistics, error) {
 	aostClause := testingKnobs.GetAOSTClause()
 	const expectedNumDatums = 5
 	const queryFormat = `
@@ -968,7 +968,7 @@ FROM (SELECT app_name,
 		}
 	}
 
-	var transactions []serverpb.StatementsResponse_ExtendedCollectedTransactionStatistics
+	var transactions []serverpb.ExtendedCollectedTransactionStatistics
 	var ok bool
 	for ok, err = it.Next(ctx); ok; ok, err = it.Next(ctx) {
 		var row tree.Datums
@@ -999,7 +999,7 @@ FROM (SELECT app_name,
 			return nil, srverrors.ServerError(ctx, err)
 		}
 
-		txnStats := serverpb.StatementsResponse_ExtendedCollectedTransactionStatistics{
+		txnStats := serverpb.ExtendedCollectedTransactionStatistics{
 			StatsData: appstatspb.CollectedTransactionStatistics{
 				StatementFingerprintIDs:  metadata.StatementFingerprintIDs,
 				App:                      app,
@@ -1023,11 +1023,11 @@ func collectStmtsForTxns(
 	ctx context.Context,
 	ie *sql.InternalExecutor,
 	req *serverpb.CombinedStatementsStatsRequest,
-	transactions []serverpb.StatementsResponse_ExtendedCollectedTransactionStatistics,
+	transactions []serverpb.ExtendedCollectedTransactionStatistics,
 	testingKnobs *sqlstats.TestingKnobs,
 	activityTableHasAllData bool,
 	tableSuffix string,
-) ([]serverpb.StatementsResponse_CollectedStatementStatistics, error) {
+) ([]serverpb.CollectedStatementStatistics, error) {
 
 	whereClause, args := buildWhereClauseForStmtsByTxn(req, transactions, testingKnobs)
 
@@ -1112,7 +1112,7 @@ GROUP BY
 		}
 	}()
 
-	var statements []serverpb.StatementsResponse_CollectedStatementStatistics
+	var statements []serverpb.CollectedStatementStatistics
 	var ok bool
 	for ok, err = it.Next(ctx); ok; ok, err = it.Next(ctx) {
 		var row tree.Datums
@@ -1150,8 +1150,8 @@ GROUP BY
 		app := string(tree.MustBeDString(row[4]))
 		metadata.Key.App = app
 
-		stmt := serverpb.StatementsResponse_CollectedStatementStatistics{
-			Key: serverpb.StatementsResponse_ExtendedStatementStatisticsKey{
+		stmt := serverpb.CollectedStatementStatistics{
+			Key: serverpb.ExtendedStatementStatisticsKey{
 				KeyData: metadata.Key,
 			},
 			ID:    appstatspb.StmtFingerprintID(statementFingerprintID),
@@ -1196,7 +1196,7 @@ func getStatementDetails(
 ) (*serverpb.StatementDetailsResponse, error) {
 	limit := SQLStatsResponseMax.Get(&settings.SV)
 	showInternal := SQLStatsShowInternal.Get(&settings.SV)
-	whereClause, args, err := getStatementDetailsQueryClausesAndArgs(req, testingKnobs, showInternal)
+	whereClause, args, err := getDetailsQueryClausesAndArgs(req, testingKnobs, showInternal)
 	if err != nil {
 		return nil, srverrors.ServerError(ctx, err)
 	}
@@ -1279,16 +1279,34 @@ func getStatementDetails(
 	return response, nil
 }
 
-// getStatementDetailsQueryClausesAndArgs returns whereClause and its arguments.
+// getDetailsQueryClausesAndArgs returns whereClause and its arguments.
 // The whereClause will be in the format `WHERE A = $1 AND B = $2` and
 // args will return the list of arguments in order that will replace the actual values.
-func getStatementDetailsQueryClausesAndArgs(
-	req *serverpb.StatementDetailsRequest, testingKnobs *sqlstats.TestingKnobs, showInternal bool,
+func getDetailsQueryClausesAndArgs(
+	req interface{}, testingKnobs *sqlstats.TestingKnobs, showInternal bool,
 ) (whereClause string, args []interface{}, err error) {
 	var buffer strings.Builder
 	buffer.WriteString(testingKnobs.GetAOSTClause())
 
-	fingerprintID, err := strconv.ParseUint(req.FingerprintId, 10, 64)
+	var reqFingerprintID string
+	var reqAppNames []string
+	var reqStart int64
+	var reqEnd int64
+
+	switch req := req.(type) {
+	case *serverpb.StatementDetailsRequest:
+		reqFingerprintID = req.FingerprintId
+		reqAppNames = req.AppNames
+		reqStart = req.Start
+		reqEnd = req.End
+	case *serverpb.TransactionDetailsRequest:
+		reqFingerprintID = req.FingerprintId
+		reqAppNames = req.AppNames
+		reqStart = req.Start
+		reqEnd = req.End
+	}
+
+	fingerprintID, err := strconv.ParseUint(reqFingerprintID, 10, 64)
 	if err != nil {
 		return "", nil, err
 	}
@@ -1303,11 +1321,11 @@ func getStatementDetailsQueryClausesAndArgs(
 
 	// Statements are grouped ignoring the app name in the Statements/Transactions page, so when
 	// calling for the Statement Details endpoint, this value can be empty or a list of app names.
-	if len(req.AppNames) > 0 {
-		if !(len(req.AppNames) == 1 && req.AppNames[0] == "") {
+	if len(reqAppNames) > 0 {
+		if !(len(reqAppNames) == 1 && reqAppNames[0] == "") {
 			hasInternal := false
 			buffer.WriteString(" AND (")
-			for i, app := range req.AppNames {
+			for i, app := range reqAppNames {
 				if app == "(unset)" {
 					app = ""
 				}
@@ -1329,12 +1347,12 @@ func getStatementDetailsQueryClausesAndArgs(
 		}
 	}
 
-	start := getTimeFromSeconds(req.Start)
+	start := getTimeFromSeconds(reqStart)
 	if start != nil {
 		args = append(args, *start)
 		buffer.WriteString(fmt.Sprintf(" AND aggregated_ts >= $%d", len(args)))
 	}
-	end := getTimeFromSeconds(req.End)
+	end := getTimeFromSeconds(reqEnd)
 	if end != nil {
 		args = append(args, *end)
 		buffer.WriteString(fmt.Sprintf(" AND aggregated_ts <= $%d", len(args)))
@@ -1801,4 +1819,150 @@ LIMIT $%d`, whereClause, len(args)), args...)
 	}
 
 	return statements, nil
+}
+
+func (s *statusServer) TransactionDetails(
+	ctx context.Context, req *serverpb.TransactionDetailsRequest,
+) (*serverpb.TransactionDetailsResponse, error) {
+	ctx = authserver.ForwardSQLIdentityThroughRPCCalls(ctx)
+	ctx = s.AnnotateCtx(ctx)
+
+	if err := s.privilegeChecker.RequireViewActivityOrViewActivityRedactedPermission(ctx); err != nil {
+		return nil, err
+	}
+
+	return getTransactionDetails(
+		ctx,
+		req,
+		s.internalExecutor,
+		s.st,
+		s.sqlServer.execCfg.SQLStatsTestingKnobs)
+}
+
+func getTransactionDetails(
+	ctx context.Context,
+	req *serverpb.TransactionDetailsRequest,
+	ie *sql.InternalExecutor,
+	settings *cluster.Settings,
+	testingKnobs *sqlstats.TestingKnobs,
+) (*serverpb.TransactionDetailsResponse, error) {
+	showInternal := SQLStatsShowInternal.Get(&settings.SV)
+	whereClause, args, err := getDetailsQueryClausesAndArgs(req, testingKnobs, showInternal)
+	if err != nil {
+		return nil, srverrors.ServerError(ctx, err)
+	}
+
+	transactionTotal, err := getTotalTransactionDetails(ctx, ie, whereClause, args)
+	if err != nil {
+		return nil, srverrors.ServerError(ctx, err)
+	}
+	
+	response := &serverpb.TransactionDetailsResponse{
+		Transaction:           transactionTotal,
+		InternalAppNamePrefix: catconstants.InternalAppNamePrefix,
+	}
+
+	return response, nil
+}
+
+// getTotalTransactionDetails return all the statistics for the selected transaction combined.
+func getTotalTransactionDetails(
+	_ctx context.Context,
+	_ie *sql.InternalExecutor,
+	_whereClause string,
+	_args []interface{},
+) (serverpb.ExtendedCollectedTransactionStatistics, error) {
+	return serverpb.ExtendedCollectedTransactionStatistics{}, nil
+	//	const expectedNumDatums = 4
+	//	var statement serverpb.StatementDetailsResponse_CollectedStatementSummary
+	//	const queryFormat = `
+	//SELECT crdb_internal.merge_stats_metadata(array_agg(metadata))    AS metadata,
+	//       array_agg(app_name)                                        AS app_names,
+	//       crdb_internal.merge_statement_stats(array_agg(statistics)) AS statistics,
+	//       encode(fingerprint_id, 'hex')                              AS fingerprint_id
+	//FROM %s %s
+	//GROUP BY
+	//    fingerprint_id
+	//LIMIT 1`
+	//
+	//	var row tree.Datums
+	//	var err error
+	//
+	//	if activityTableHasAllData {
+	//		row, err = ie.QueryRowEx(ctx, "combined-stmts-activity-details-total", nil,
+	//			sessiondata.NodeUserSessionDataOverride, fmt.Sprintf(`
+	//SELECT crdb_internal.merge_aggregated_stmt_metadata(array_agg(metadata)) AS metadata,
+	//       array_agg(app_name)                                               AS app_names,
+	//       crdb_internal.merge_statement_stats(array_agg(statistics))        AS statistics,
+	//       encode(fingerprint_id, 'hex')                                     AS fingerprint_id
+	//FROM crdb_internal.statement_activity %s
+	//GROUP BY
+	//    fingerprint_id
+	//LIMIT 1`, whereClause), args...)
+	//		if err != nil {
+	//			return statement, srverrors.ServerError(ctx, err)
+	//		}
+	//	}
+	//	// If there are no results from the activity table, retrieve the data from the persisted table.
+	//	if row == nil || row.Len() == 0 {
+	//		row, err = ie.QueryRowEx(ctx, "combined-stmts-persisted-details-total", nil,
+	//			sessiondata.NodeUserSessionDataOverride,
+	//			fmt.Sprintf(
+	//				queryFormat,
+	//				"crdb_internal.statement_statistics_persisted"+tableSuffix,
+	//				whereClause), args...)
+	//		if err != nil {
+	//			return statement, srverrors.ServerError(ctx, err)
+	//		}
+	//	}
+	//
+	//	// If there are no results from the persisted table, retrieve the data from the combined view
+	//	// with data in-memory.
+	//	if row.Len() == 0 {
+	//		row, err = ie.QueryRowEx(ctx, "combined-stmts-details-total-with-memory", nil,
+	//			sessiondata.NodeUserSessionDataOverride,
+	//			fmt.Sprintf(queryFormat, "crdb_internal.statement_statistics", whereClause), args...)
+	//		if err != nil {
+	//			return statement, srverrors.ServerError(ctx, err)
+	//		}
+	//	}
+	//
+	//	// If there are no results in-memory, return empty statement object.
+	//	if row.Len() == 0 {
+	//		return statement, nil
+	//	}
+	//	if row.Len() != expectedNumDatums {
+	//		return statement, srverrors.ServerError(ctx, errors.Newf(
+	//			"expected %d columns on getTotalStatementDetails, received %d", expectedNumDatums))
+	//	}
+	//
+	//	var statistics appstatspb.CollectedStatementStatistics
+	//	var aggregatedMetadata appstatspb.AggregatedStatementMetadata
+	//	metadataJSON := tree.MustBeDJSON(row[0]).JSON
+	//
+	//	if err = sqlstatsutil.DecodeAggregatedMetadataJSON(metadataJSON, &aggregatedMetadata); err != nil {
+	//		return statement, srverrors.ServerError(ctx, err)
+	//	}
+	//
+	//	apps := tree.MustBeDArray(row[1])
+	//	var appNames []string
+	//	for _, s := range apps.Array {
+	//		appNames = util.CombineUnique(appNames, []string{string(tree.MustBeDString(s))})
+	//	}
+	//	aggregatedMetadata.AppNames = appNames
+	//
+	//	statsJSON := tree.MustBeDJSON(row[2]).JSON
+	//	if err = sqlstatsutil.DecodeStmtStatsStatisticsJSON(statsJSON, &statistics.Stats); err != nil {
+	//		return statement, srverrors.ServerError(ctx, err)
+	//	}
+	//
+	//	aggregatedMetadata.FormattedQuery = aggregatedMetadata.Query
+	//	aggregatedMetadata.FingerprintID = string(tree.MustBeDString(row[3]))
+	//
+	//	statement = serverpb.StatementDetailsResponse_CollectedStatementSummary{
+	//		Metadata: aggregatedMetadata,
+	//		Stats:    statistics.Stats,
+	//	}
+	//
+	//	return statement, nil
 }

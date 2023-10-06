@@ -18,7 +18,7 @@ import { barChartFactory, BarChartOptions } from "./barChartFactory";
 import { AggregateStatistics } from "src/statementsTable/statementsTable";
 
 type StatementStatistics =
-  protos.cockroach.server.serverpb.StatementsResponse.ICollectedStatementStatistics;
+  protos.cockroach.server.serverpb.ICollectedStatementStatistics;
 const cx = classNames.bind(styles);
 
 const countBars = [

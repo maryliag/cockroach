@@ -17,7 +17,7 @@ import (
 	"github.com/cockroachdb/cockroach/pkg/sql/sqlstats/ssmemstorage"
 )
 
-type stmtResponseList []serverpb.StatementsResponse_CollectedStatementStatistics
+type stmtResponseList []serverpb.CollectedStatementStatistics
 
 var _ sort.Interface = stmtResponseList{}
 
@@ -36,7 +36,7 @@ func (s stmtResponseList) Swap(i, j int) {
 	s[i], s[j] = s[j], s[i]
 }
 
-type txnResponseList []serverpb.StatementsResponse_ExtendedCollectedTransactionStatistics
+type txnResponseList []serverpb.ExtendedCollectedTransactionStatistics
 
 var _ sort.Interface = txnResponseList{}
 
@@ -64,7 +64,7 @@ func (t txnResponseList) Swap(i, j int) {
 // long as the duration of the RPC request itself. This is why it bypasses the
 // existing memory accounting infrastructure and fingerprint cluster limit.
 func NewTempSQLStatsFromExistingStmtStats(
-	statistics []serverpb.StatementsResponse_CollectedStatementStatistics,
+	statistics []serverpb.CollectedStatementStatistics,
 ) (*SQLStats, error) {
 	sort.Sort(stmtResponseList(statistics))
 
@@ -97,7 +97,7 @@ func NewTempSQLStatsFromExistingStmtStats(
 // long as the duration of the RPC request itself. This is why it bypasses the
 // existing memory accounting infrastructure and fingerprint cluster limit.
 func NewTempSQLStatsFromExistingTxnStats(
-	statistics []serverpb.StatementsResponse_ExtendedCollectedTransactionStatistics,
+	statistics []serverpb.ExtendedCollectedTransactionStatistics,
 ) (*SQLStats, error) {
 	sort.Sort(txnResponseList(statistics))
 

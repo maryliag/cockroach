@@ -624,7 +624,7 @@ func TestStatusAPICombinedStatementsWithFullScans(t *testing.T) {
 
 		// actualResponseStatsMap maps the query response format to the actual
 		// statement statistics received from the server response.
-		actualResponseStatsMap := make(map[string]serverpb.StatementsResponse_CollectedStatementStatistics)
+		actualResponseStatsMap := make(map[string]serverpb.CollectedStatementStatistics)
 		for _, respStatement := range resp.Statements {
 			// Skip failed statements: The test app may encounter transient 40001
 			// errors that are automatically retried. Thus, we only consider

@@ -23,10 +23,9 @@ import { Location } from "history";
 import { statementFingerprintIdsToText } from "../transactionsPage/utils";
 
 type Transaction =
-  cockroach.server.serverpb.StatementsResponse.IExtendedCollectedTransactionStatistics;
+  cockroach.server.serverpb.IExtendedCollectedTransactionStatistics;
 
-type Statement =
-  cockroach.server.serverpb.StatementsResponse.ICollectedStatementStatistics;
+type Statement = cockroach.server.serverpb.ICollectedStatementStatistics;
 
 /**
  * getTxnFromSqlStatsTxns returns the txn from the txns list with the

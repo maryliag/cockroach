@@ -20,10 +20,9 @@ import { data, nodeRegions } from "./transactions.fixture";
 import Long from "long";
 import * as protos from "@cockroachlabs/crdb-protobuf-client";
 
-type Statement =
-  protos.cockroach.server.serverpb.StatementsResponse.ICollectedStatementStatistics;
+type Statement = protos.cockroach.server.serverpb.ICollectedStatementStatistics;
 type Transaction =
-  protos.cockroach.server.serverpb.StatementsResponse.IExtendedCollectedTransactionStatistics;
+  protos.cockroach.server.serverpb.IExtendedCollectedTransactionStatistics;
 
 describe("getStatementsByFingerprintId", () => {
   it("filters statements by fingerprint id", () => {

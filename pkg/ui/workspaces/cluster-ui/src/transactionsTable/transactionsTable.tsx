@@ -50,9 +50,8 @@ import statsTablePageStyles from "src/statementsTable/statementsTableContent.mod
 import { BarChartOptions } from "../barCharts/barChartFactory";
 
 export type Transaction =
-  protos.cockroach.server.serverpb.StatementsResponse.IExtendedCollectedTransactionStatistics;
-type Statement =
-  protos.cockroach.server.serverpb.StatementsResponse.ICollectedStatementStatistics;
+  protos.cockroach.server.serverpb.IExtendedCollectedTransactionStatistics;
+type Statement = protos.cockroach.server.serverpb.ICollectedStatementStatistics;
 
 interface TransactionsTable {
   transactions: TransactionInfo[];

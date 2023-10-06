@@ -99,8 +99,7 @@ const cx = classNames.bind(statementsStyles);
 const timeScaleStylesCx = classNames.bind(timeScaleStyles);
 const insightsTableCx = classNames.bind(insightTableStyles);
 
-type Statement =
-  protos.cockroach.server.serverpb.StatementsResponse.ICollectedStatementStatistics;
+type Statement = protos.cockroach.server.serverpb.ICollectedStatementStatistics;
 
 const summaryCardStylesCx = classNames.bind(summaryCardStyles);
 const transactionDetailsStylesCx = classNames.bind(transactionDetailsStyles);

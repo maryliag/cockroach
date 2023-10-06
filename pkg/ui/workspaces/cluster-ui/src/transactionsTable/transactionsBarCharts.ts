@@ -16,7 +16,7 @@ import { barChartFactory } from "src/barCharts/barChartFactory";
 import { bar, approximify } from "src/barCharts/utils";
 
 type Transaction =
-  protos.cockroach.server.serverpb.StatementsResponse.IExtendedCollectedTransactionStatistics;
+  protos.cockroach.server.serverpb.IExtendedCollectedTransactionStatistics;
 const cx = classNames.bind(styles);
 
 const countBar = [

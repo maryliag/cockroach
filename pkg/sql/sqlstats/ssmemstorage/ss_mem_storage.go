@@ -199,17 +199,17 @@ func (s *Container) IterateTransactionStats(
 }
 
 // NewTempContainerFromExistingStmtStats creates a new Container by ingesting a slice
-// of serverpb.StatementsResponse_CollectedStatementStatistics sorted by
+// of serverpb.CollectedStatementStatistics sorted by
 // Key.KeyData.App field.
 // It consumes the first chunk of the slice where
 // all entries in the chunk contains the identical appName. The remaining
 // slice is returned as the result.
 // It returns a nil slice once all entries in statistics are consumed.
 func NewTempContainerFromExistingStmtStats(
-	statistics []serverpb.StatementsResponse_CollectedStatementStatistics,
+	statistics []serverpb.CollectedStatementStatistics,
 ) (
 	container *Container,
-	remaining []serverpb.StatementsResponse_CollectedStatementStatistics,
+	remaining []serverpb.CollectedStatementStatistics,
 	err error,
 ) {
 	if len(statistics) == 0 {
@@ -281,10 +281,10 @@ func (s *Container) MaybeLogDiscardMessage(ctx context.Context) {
 // contains the identical appName. The remaining slice is returned as the result.
 // It returns a nil slice once all entries in statistics are consumed.
 func NewTempContainerFromExistingTxnStats(
-	statistics []serverpb.StatementsResponse_ExtendedCollectedTransactionStatistics,
+	statistics []serverpb.ExtendedCollectedTransactionStatistics,
 ) (
 	container *Container,
-	remaining []serverpb.StatementsResponse_ExtendedCollectedTransactionStatistics,
+	remaining []serverpb.ExtendedCollectedTransactionStatistics,
 	err error,
 ) {
 	if len(statistics) == 0 {

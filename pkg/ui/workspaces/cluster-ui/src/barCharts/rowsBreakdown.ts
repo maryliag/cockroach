@@ -14,7 +14,7 @@ import { formatTwoPlaces, normalizeClosedDomain } from "./utils";
 import * as protos from "@cockroachlabs/crdb-protobuf-client";
 
 type StatementStatistics =
-  protos.cockroach.server.serverpb.StatementsResponse.ICollectedStatementStatistics;
+  protos.cockroach.server.serverpb.ICollectedStatementStatistics;
 
 export function rowsBreakdown(s: StatementStatistics) {
   const mean = s.stats.num_rows.mean;

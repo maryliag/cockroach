@@ -50,7 +50,7 @@ import (
 )
 
 // TestStmtStatsBulkIngestWithRandomMetadata generates a sequence of random
-// serverpb.StatementsResponse_CollectedStatementStatistics that simulates the
+// serverpb.CollectedStatementStatistics that simulates the
 // response from RPC fanout, and use a temporary SQLStats object to ingest
 // that sequence. This test checks if the metadata are being properly
 // updated in the temporary SQLStats object.
@@ -58,10 +58,10 @@ func TestStmtStatsBulkIngestWithRandomMetadata(t *testing.T) {
 	defer leaktest.AfterTest(t)()
 	defer log.Scope(t).Close(t)
 
-	var testData []serverpb.StatementsResponse_CollectedStatementStatistics
+	var testData []serverpb.CollectedStatementStatistics
 
 	for i := 0; i < 50; i++ {
-		var stats serverpb.StatementsResponse_CollectedStatementStatistics
+		var stats serverpb.CollectedStatementStatistics
 		randomData := sqlstatsutil.GetRandomizedCollectedStatementStatisticsForTest(t)
 		stats.Key.KeyData = randomData.Key
 		testData = append(testData, stats)
@@ -169,10 +169,10 @@ func TestSQLStatsStmtStatsBulkIngest(t *testing.T) {
 
 	expectedCount := make(map[string]int64)
 	input :=
-		make([]serverpb.StatementsResponse_CollectedStatementStatistics, 0, len(testData))
+		make([]serverpb.CollectedStatementStatistics, 0, len(testData))
 
 	for i := range testData {
-		var stats serverpb.StatementsResponse_CollectedStatementStatistics
+		var stats serverpb.CollectedStatementStatistics
 		stats.Stats = testData[i].stats
 		stats.ID = testData[i].id
 		stats.Key.KeyData = testData[i].key
@@ -270,10 +270,10 @@ func TestSQLStatsTxnStatsBulkIngest(t *testing.T) {
 
 	expectedCount := make(map[appstatspb.TransactionFingerprintID]int64)
 	input :=
-		make([]serverpb.StatementsResponse_ExtendedCollectedTransactionStatistics, 0, len(testData))
+		make([]serverpb.ExtendedCollectedTransactionStatistics, 0, len(testData))
 
 	for i := range testData {
-		var stats serverpb.StatementsResponse_ExtendedCollectedTransactionStatistics
+		var stats serverpb.ExtendedCollectedTransactionStatistics
 		stats.StatsData.Stats = testData[i].stats.Stats
 		input = append(input, stats)
 		if count, ok := expectedCount[stats.StatsData.TransactionFingerprintID]; ok {
